@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Input, Select, Space, Table, Tabs, Tag, Tooltip, message } from "antd";
+import { Button, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, message } from "antd";
 import type { TableProps } from "antd";
 import {
   ApartmentOutlined,
@@ -10,8 +10,14 @@ import {
   SettingOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { createWorkItem, deleteWorkItem, listWorkItems } from "@/api/work-item";
-import type { WorkItem, WorkItemKind } from "@/types/work-item";
+import {
+  createWorkItem,
+  deleteWorkItem,
+  listParentProjects,
+  listParentRequirements,
+  listWorkItems,
+} from "@/api/work-item";
+import type { WorkItem, WorkItemKind, WorkItemParentOption } from "@/types/work-item";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
 import { ResizableHeaderCell } from "@/components/Table/ResizableHeaderCell";
 
@@ -149,6 +155,10 @@ export default function BoardsPage() {
   const [sortField, setSortField] = useState<"updatedAt" | "title" | undefined>();
   const [sortOrder, setSortOrder] = useState<"ascend" | "descend" | undefined>();
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [parentOptions, setParentOptions] = useState<WorkItemParentOption[]>([]);
+  const [createForm] = Form.useForm<{ title: string; owner: string; parentId?: number }>();
   const [columnConfigs, setColumnConfigs] = useState<CommonColumnConfig<BoardColumnKey>[]>(
     loadColumnsFromStorage(),
   );
@@ -182,6 +192,20 @@ export default function BoardsPage() {
     return "todo";
   }, []);
 
+  const createKind = useMemo<WorkItemKind | null>(() => {
+    if (activeKey === "projects") return "project";
+    if (activeKey === "requirements") return "requirement";
+    if (activeKey === "tasks") return "task";
+    return null;
+  }, [activeKey]);
+
+  const createLabel = useMemo(() => {
+    if (createKind === "project") return "新增项目";
+    if (createKind === "requirement") return "新增需求";
+    if (createKind === "task") return "新增任务";
+    return "";
+  }, [createKind]);
+
   const fetchRootItems = useCallback(async () => {
     setLoading(true);
     try {
@@ -211,6 +235,27 @@ export default function BoardsPage() {
   useEffect(() => {
     localStorage.setItem(COLUMN_CONFIG_KEY, JSON.stringify(columnConfigs));
   }, [columnConfigs]);
+
+  useEffect(() => {
+    if (!createOpen || !createKind) return;
+    const loadParents = async () => {
+      try {
+        if (createKind === "requirement") {
+          setParentOptions(await listParentProjects());
+          return;
+        }
+        if (createKind === "task") {
+          setParentOptions(await listParentRequirements());
+          return;
+        }
+        setParentOptions([]);
+      } catch (error) {
+        messageApi.error(`加载上级选项失败: ${String(error)}`);
+        setParentOptions([]);
+      }
+    };
+    void loadParents();
+  }, [createKind, createOpen, messageApi]);
 
   const toggleExpanded = useCallback(
     async (row: BoardRow) => {
@@ -464,7 +509,20 @@ export default function BoardsPage() {
   return (
     <div>
       {contextHolder}
-      <Tabs activeKey={activeKey} onChange={(key) => navigate(`/boards?tab=${key}`)} items={tabOptions} />
+      <Space style={{ width: "100%", justifyContent: "space-between", alignItems: "center" }}>
+        <Tabs activeKey={activeKey} onChange={(key) => navigate(`/boards?tab=${key}`)} items={tabOptions} />
+        {createKind && (
+          <Button
+            type="primary"
+            onClick={() => {
+              createForm.resetFields();
+              setCreateOpen(true);
+            }}
+          >
+            {createLabel}
+          </Button>
+        )}
+      </Space>
       <Space direction="vertical" size={16} style={{ width: "100%" }}>
         <Space style={{ justifyContent: "space-between", width: "100%" }}>
           <Space wrap>
@@ -534,6 +592,66 @@ export default function BoardsPage() {
         setColumnConfigs={setColumnConfigs}
         onResetDefault={() => setColumnConfigs(defaultColumns.map((item) => ({ ...item })))}
       />
+      <Modal
+        title={createLabel}
+        open={createOpen}
+        confirmLoading={creating}
+        onCancel={() => setCreateOpen(false)}
+        onOk={() => {
+          if (!createKind) return;
+          void (async () => {
+            setCreating(true);
+            try {
+              const values = await createForm.validateFields();
+              await createWorkItem({
+                kind: createKind,
+                parentId: values.parentId,
+                title: values.title,
+                status: getDefaultStatus(createKind),
+                priority: "medium",
+                owner: values.owner,
+                effort: createKind === "requirement" ? 0 : undefined,
+                planMonth: createKind === "requirement" ? "" : undefined,
+                plannedHours: createKind === "task" ? 0 : undefined,
+                actualHours: createKind === "task" ? 0 : undefined,
+                dueDate: createKind === "task" ? "" : undefined,
+              });
+              messageApi.success(`${createLabel}成功`);
+              setCreateOpen(false);
+              void fetchRootItems();
+            } catch (error) {
+              messageApi.error(`创建失败: ${String(error)}`);
+            } finally {
+              setCreating(false);
+            }
+          })();
+        }}
+      >
+        <Form form={createForm} layout="vertical">
+          {(createKind === "requirement" || createKind === "task") && (
+            <Form.Item
+              label={createKind === "requirement" ? "所属项目" : "所属需求"}
+              name="parentId"
+              rules={[{ required: true, message: "请选择上级" }]}
+            >
+              <Select
+                showSearch
+                options={parentOptions.map((item) => ({
+                  label: `${item.itemId} - ${item.title}`,
+                  value: item.id,
+                }))}
+                placeholder="请选择"
+              />
+            </Form.Item>
+          )}
+          <Form.Item label="标题" name="title" rules={[{ required: true, message: "请输入标题" }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="负责人" name="owner" rules={[{ required: true, message: "请输入负责人" }]}>
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }
