@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Input, Select, Space, Table, Tabs, Tag, message } from "antd";
+import { Button, Input, Select, Space, Table, Tabs, Tag, Tooltip, message } from "antd";
 import type { TableProps } from "antd";
-import { DownOutlined, RightOutlined, SettingOutlined } from "@ant-design/icons";
+import {
+  ApartmentOutlined,
+  DeleteOutlined,
+  DownOutlined,
+  EditOutlined,
+  RightOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { listWorkItems } from "@/api/work-item";
+import { createWorkItem, deleteWorkItem, listWorkItems } from "@/api/work-item";
 import type { WorkItem, WorkItemKind } from "@/types/work-item";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
 import { ResizableHeaderCell } from "@/components/Table/ResizableHeaderCell";
@@ -169,6 +176,12 @@ export default function BoardsPage() {
     return null;
   }, []);
 
+  const getDefaultStatus = useCallback((kind: WorkItemKind): string => {
+    if (kind === "project") return "preparing";
+    if (kind === "requirement") return "new";
+    return "todo";
+  }, []);
+
   const fetchRootItems = useCallback(async () => {
     setLoading(true);
     try {
@@ -296,6 +309,108 @@ export default function BoardsPage() {
       sorter: true,
       render: (_: unknown, record) => new Date(record.item.updatedAt * 1000).toLocaleString(),
     },
+    {
+      key: "actions",
+      title: "操作",
+      width: 132,
+      fixed: "right",
+      render: (_: unknown, record) => {
+        const nextKind = getNextKind(record.item.kind);
+        return (
+          <Space size={4}>
+            <Tooltip title="分解下层">
+              <Button
+                type="text"
+                size="small"
+                icon={<ApartmentOutlined />}
+                disabled={!nextKind}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!nextKind) return;
+                  void (async () => {
+                    try {
+                      const created = await createWorkItem({
+                        kind: nextKind,
+                        parentId: record.item.id,
+                        title: `新建${kindLabelMap[nextKind]}`,
+                        status: getDefaultStatus(nextKind),
+                        priority: "medium",
+                        owner: record.item.owner || "未分配",
+                        effort: nextKind === "requirement" ? 0 : undefined,
+                        planMonth: nextKind === "requirement" ? "" : undefined,
+                        plannedHours: nextKind === "task" || nextKind === "subtask" ? 0 : undefined,
+                        actualHours: nextKind === "task" || nextKind === "subtask" ? 0 : undefined,
+                        dueDate: nextKind === "task" || nextKind === "subtask" ? "" : undefined,
+                      });
+                      messageApi.success(`已新增${kindLabelMap[nextKind]}：${created.itemId}`);
+                      if (expandedIds.includes(record.item.id)) {
+                        const currentChildren = childrenByParent[record.item.id] ?? [];
+                        setChildrenByParent((prev) => ({
+                          ...prev,
+                          [record.item.id]: [created, ...currentChildren],
+                        }));
+                      }
+                      void fetchRootItems();
+                    } catch (error) {
+                      messageApi.error(`分解失败: ${String(error)}`);
+                    }
+                  })();
+                }}
+              />
+            </Tooltip>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (record.item.kind === "requirement") {
+                  navigate(`/requirements/${record.item.id}`);
+                  return;
+                }
+                if (record.item.kind === "task") {
+                  navigate(`/tasks/${record.item.id}`);
+                  return;
+                }
+                messageApi.info("该类型暂未提供独立详情页");
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              type="text"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                void (async () => {
+                  try {
+                    await deleteWorkItem(record.item.id);
+                    messageApi.success("删除成功");
+                    setExpandedIds((prev) => prev.filter((id) => id !== record.item.id));
+                    setChildrenByParent((prev) => {
+                      const next: Record<number, WorkItem[]> = {};
+                      for (const [parentId, children] of Object.entries(prev)) {
+                        const parentKey = Number(parentId);
+                        if (parentKey === record.item.id) continue;
+                        next[parentKey] = children.filter((child) => child.id !== record.item.id);
+                      }
+                      return next;
+                    });
+                    void fetchRootItems();
+                  } catch (error) {
+                    messageApi.error(`删除失败: ${String(error)}`);
+                  }
+                })();
+              }}
+            />
+          </Tooltip>
+          </Space>
+        );
+      },
+    },
   ];
 
   const visibleColumnKeys = useMemo(
@@ -333,7 +448,12 @@ export default function BoardsPage() {
         }),
       };
     });
-    return [baseColumns[0], ...resized.filter((col) => String(col.key) !== "expand")];
+    const actionsColumn = map.get("actions");
+    return [
+      baseColumns[0],
+      ...resized.filter((col) => String(col.key) !== "expand" && String(col.key) !== "actions"),
+      ...(actionsColumn ? [actionsColumn] : []),
+    ];
   }, [baseColumns, columnWidths, visibleColumnKeys]);
 
   const tableScrollX = useMemo(() => {
