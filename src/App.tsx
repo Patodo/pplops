@@ -2,9 +2,7 @@ import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/components/Layout/AppLayout";
-import DashboardPage from "@/pages/Dashboard";
-import RequirementsListPage from "@/pages/Requirements";
-import RequirementsBoardPage from "@/pages/Requirements/Board";
+import BoardsPage from "@/pages/Boards";
 import RequirementDetailPage from "@/pages/Requirements/Detail";
 import PlanningOverviewPage from "@/pages/Planning";
 import MonthlyPlanPage from "@/pages/Planning/Month";
@@ -13,8 +11,6 @@ import GanttChartPage from "@/pages/Planning/Gantt";
 import MembersListPage from "@/pages/Members";
 import MemberDetailPage from "@/pages/Members/Detail";
 import SkillsMatrixPage from "@/pages/Members/Skills";
-import TasksListPage from "@/pages/Tasks";
-import TasksBoardPage from "@/pages/Tasks/Board";
 import TaskDetailPage from "@/pages/Tasks/Detail";
 import WorkloadOverviewPage from "@/pages/Workload";
 import WorkloadVerifyPage from "@/pages/Workload/Verify";
@@ -29,9 +25,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<AppLayout />}>
-            <Route index element={<DashboardPage />} />
-            <Route path="requirements" element={<RequirementsListPage />} />
-            <Route path="requirements/board" element={<RequirementsBoardPage />} />
+            <Route index element={<Navigate to="/boards" replace />} />
+            <Route path="boards" element={<BoardsPage />} />
             <Route path="requirements/:id" element={<RequirementDetailPage />} />
             <Route path="planning" element={<PlanningOverviewPage />} />
             <Route path="planning/month/:month" element={<MonthlyPlanPage />} />
@@ -40,8 +35,6 @@ function App() {
             <Route path="members" element={<MembersListPage />} />
             <Route path="members/skills" element={<SkillsMatrixPage />} />
             <Route path="members/:id" element={<MemberDetailPage />} />
-            <Route path="tasks" element={<TasksListPage />} />
-            <Route path="tasks/board" element={<TasksBoardPage />} />
             <Route path="tasks/:id" element={<TaskDetailPage />} />
             <Route path="workload" element={<WorkloadOverviewPage />} />
             <Route path="workload/verify" element={<WorkloadVerifyPage />} />

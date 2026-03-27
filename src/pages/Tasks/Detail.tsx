@@ -166,7 +166,7 @@ export default function TaskDetailPage() {
       {contextHolder}
       <Button
         icon={<ArrowLeftOutlined />}
-        onClick={() => navigate("/tasks")}
+        onClick={() => navigate("/boards?tab=tasks")}
         style={{ width: "fit-content" }}
       >
         返回任务列表

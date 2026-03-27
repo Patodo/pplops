@@ -154,7 +154,7 @@ export default function RequirementDetailPage() {
       {contextHolder}
       <Button
         icon={<ArrowLeftOutlined />}
-        onClick={() => navigate("/requirements")}
+        onClick={() => navigate("/boards?tab=requirements")}
         style={{ width: "fit-content" }}
       >
         返回需求列表

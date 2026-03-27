@@ -1,0 +1,419 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Input, Select, Space, Table, Tabs, Tag, message } from "antd";
+import type { TableProps } from "antd";
+import { DownOutlined, RightOutlined, SettingOutlined } from "@ant-design/icons";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { listWorkItems } from "@/api/work-item";
+import type { WorkItem, WorkItemKind } from "@/types/work-item";
+import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
+import { ResizableHeaderCell } from "@/components/Table/ResizableHeaderCell";
+
+type BoardTabKey = "dashboard" | "projects" | "requirements" | "tasks";
+type BoardColumnKey =
+  | "itemId"
+  | "title"
+  | "kind"
+  | "status"
+  | "priority"
+  | "owner"
+  | "effort"
+  | "planMonth"
+  | "plannedHours"
+  | "actualHours"
+  | "dueDate"
+  | "updatedAt";
+
+type BoardRow = { key: string; item: WorkItem; depth: number };
+
+const tabOptions: Array<{ key: BoardTabKey; label: string }> = [
+  { key: "dashboard", label: "仪表盘" },
+  { key: "projects", label: "项目" },
+  { key: "requirements", label: "需求" },
+  { key: "tasks", label: "任务" },
+];
+
+const COLUMN_CONFIG_KEY = "pplops.boards.columns";
+const COLUMN_WIDTH_KEY = "pplops.boards.column-widths";
+
+const columnTitleMap: Record<BoardColumnKey, string> = {
+  itemId: "ID",
+  title: "标题",
+  kind: "类型",
+  status: "状态",
+  priority: "优先级",
+  owner: "负责人",
+  effort: "工作量(人天)",
+  planMonth: "计划月份",
+  plannedHours: "计划工时",
+  actualHours: "实际工时",
+  dueDate: "到期日",
+  updatedAt: "更新时间",
+};
+
+const defaultColumns: CommonColumnConfig<BoardColumnKey>[] = [
+  { columnKey: "itemId", visible: true, order: 0 },
+  { columnKey: "title", visible: true, order: 1 },
+  { columnKey: "kind", visible: true, order: 2 },
+  { columnKey: "status", visible: true, order: 3 },
+  { columnKey: "priority", visible: true, order: 4 },
+  { columnKey: "owner", visible: true, order: 5 },
+  { columnKey: "effort", visible: true, order: 6 },
+  { columnKey: "planMonth", visible: true, order: 7 },
+  { columnKey: "plannedHours", visible: true, order: 8 },
+  { columnKey: "actualHours", visible: true, order: 9 },
+  { columnKey: "dueDate", visible: true, order: 10 },
+  { columnKey: "updatedAt", visible: true, order: 11 },
+];
+
+const defaultColumnWidths: Record<BoardColumnKey, number> = {
+  itemId: 180,
+  title: 320,
+  kind: 120,
+  status: 120,
+  priority: 120,
+  owner: 180,
+  effort: 140,
+  planMonth: 140,
+  plannedHours: 140,
+  actualHours: 140,
+  dueDate: 140,
+  updatedAt: 220,
+};
+
+const kindLabelMap: Record<WorkItemKind, string> = {
+  project: "项目",
+  requirement: "需求",
+  task: "任务",
+  subtask: "子任务",
+};
+
+function loadColumnsFromStorage(): CommonColumnConfig<BoardColumnKey>[] {
+  try {
+    const raw = localStorage.getItem(COLUMN_CONFIG_KEY);
+    if (!raw) return defaultColumns;
+    const parsed = JSON.parse(raw) as CommonColumnConfig<BoardColumnKey>[];
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultColumns;
+  } catch {
+    return defaultColumns;
+  }
+}
+
+function loadColumnWidthsFromStorage(): Record<BoardColumnKey, number> {
+  try {
+    const raw = localStorage.getItem(COLUMN_WIDTH_KEY);
+    if (!raw) return { ...defaultColumnWidths };
+    const parsed = JSON.parse(raw) as Partial<Record<BoardColumnKey, number>>;
+    return {
+      itemId: parsed.itemId ?? defaultColumnWidths.itemId,
+      title: parsed.title ?? defaultColumnWidths.title,
+      kind: parsed.kind ?? defaultColumnWidths.kind,
+      status: parsed.status ?? defaultColumnWidths.status,
+      priority: parsed.priority ?? defaultColumnWidths.priority,
+      owner: parsed.owner ?? defaultColumnWidths.owner,
+      effort: parsed.effort ?? defaultColumnWidths.effort,
+      planMonth: parsed.planMonth ?? defaultColumnWidths.planMonth,
+      plannedHours: parsed.plannedHours ?? defaultColumnWidths.plannedHours,
+      actualHours: parsed.actualHours ?? defaultColumnWidths.actualHours,
+      dueDate: parsed.dueDate ?? defaultColumnWidths.dueDate,
+      updatedAt: parsed.updatedAt ?? defaultColumnWidths.updatedAt,
+    };
+  } catch {
+    return { ...defaultColumnWidths };
+  }
+}
+
+export default function BoardsPage() {
+  const [messageApi, contextHolder] = message.useMessage();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get("tab");
+  const activeKey: BoardTabKey = useMemo(() => {
+    if (tab === "projects" || tab === "requirements" || tab === "tasks") return tab;
+    return "dashboard";
+  }, [tab]);
+
+  const [items, setItems] = useState<WorkItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedIds, setExpandedIds] = useState<number[]>([]);
+  const [childrenByParent, setChildrenByParent] = useState<Record<number, WorkItem[]>>({});
+  const [keyword, setKeyword] = useState("");
+  const [status, setStatus] = useState<string>();
+  const [owner, setOwner] = useState<string>();
+  const [sortField, setSortField] = useState<"updatedAt" | "title" | undefined>();
+  const [sortOrder, setSortOrder] = useState<"ascend" | "descend" | undefined>();
+  const [columnDrawerOpen, setColumnDrawerOpen] = useState(false);
+  const [columnConfigs, setColumnConfigs] = useState<CommonColumnConfig<BoardColumnKey>[]>(
+    loadColumnsFromStorage(),
+  );
+  const [columnWidths, setColumnWidths] = useState<Record<BoardColumnKey, number>>(
+    loadColumnWidthsFromStorage(),
+  );
+
+  const tabConfig = useMemo(() => {
+    switch (activeKey) {
+      case "projects":
+        return { rootKind: "project" as WorkItemKind, maxDepth: 1 };
+      case "requirements":
+        return { rootKind: "requirement" as WorkItemKind, maxDepth: 1 };
+      case "tasks":
+        return { rootKind: "task" as WorkItemKind, maxDepth: 1 };
+      default:
+        return { rootKind: "project" as WorkItemKind, maxDepth: 3 };
+    }
+  }, [activeKey]);
+
+  const getNextKind = useCallback((kind: WorkItemKind): WorkItemKind | null => {
+    if (kind === "project") return "requirement";
+    if (kind === "requirement") return "task";
+    if (kind === "task") return "subtask";
+    return null;
+  }, []);
+
+  const fetchRootItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await listWorkItems({
+        page: 1,
+        pageSize: 200,
+        kind: tabConfig.rootKind,
+        keyword: keyword || undefined,
+        status,
+        sortField,
+        sortOrder,
+      });
+      setItems(result.items);
+    } catch (error) {
+      messageApi.error(`加载数据失败: ${String(error)}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [keyword, messageApi, sortField, sortOrder, status, tabConfig.rootKind]);
+
+  useEffect(() => {
+    setExpandedIds([]);
+    setChildrenByParent({});
+    void fetchRootItems();
+  }, [fetchRootItems, activeKey]);
+
+  useEffect(() => {
+    localStorage.setItem(COLUMN_CONFIG_KEY, JSON.stringify(columnConfigs));
+  }, [columnConfigs]);
+
+  const toggleExpanded = useCallback(
+    async (row: BoardRow) => {
+      if (row.depth >= tabConfig.maxDepth) return;
+      const nextKind = getNextKind(row.item.kind);
+      if (!nextKind) return;
+      const key = row.item.id;
+      const expanded = expandedIds.includes(key);
+      if (expanded) {
+        setExpandedIds((prev) => prev.filter((id) => id !== key));
+        return;
+      }
+      setExpandedIds((prev) => [...prev, key]);
+      if (childrenByParent[key]) return;
+      try {
+        const result = await listWorkItems({
+          page: 1,
+          pageSize: 500,
+          kind: nextKind,
+          parentId: key,
+          sortField: "updatedAt",
+          sortOrder: "descend",
+        });
+        setChildrenByParent((prev) => ({ ...prev, [key]: result.items }));
+      } catch (error) {
+        messageApi.error(`加载子层级失败: ${String(error)}`);
+        setChildrenByParent((prev) => ({ ...prev, [key]: [] }));
+      }
+    },
+    [childrenByParent, expandedIds, getNextKind, messageApi, tabConfig.maxDepth],
+  );
+
+  const tableData = useMemo<BoardRow[]>(() => {
+    const rows: BoardRow[] = [];
+    const appendRows = (current: WorkItem[], depth: number) => {
+      for (const item of current) {
+        const row = { key: `${item.kind}-${item.id}`, item, depth };
+        rows.push(row);
+        if (expandedIds.includes(item.id) && depth < tabConfig.maxDepth) {
+          appendRows(childrenByParent[item.id] ?? [], depth + 1);
+        }
+      }
+    };
+    appendRows(items, 0);
+    return rows.filter((row) => !owner || row.item.owner === owner);
+  }, [childrenByParent, expandedIds, items, owner, tabConfig.maxDepth]);
+
+  const ownerOptions = useMemo(
+    () => [...new Set(tableData.map((row) => row.item.owner).filter(Boolean))],
+    [tableData],
+  );
+
+  const baseColumns: NonNullable<TableProps<BoardRow>["columns"]> = [
+    {
+      key: "expand",
+      width: 48,
+      render: (_: unknown, record) => {
+        const expandable = record.depth < tabConfig.maxDepth && Boolean(getNextKind(record.item.kind));
+        if (!expandable) return null;
+        const expanded = expandedIds.includes(record.item.id);
+        return (
+          <Button
+            type="text"
+            size="small"
+            icon={expanded ? <DownOutlined /> : <RightOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void toggleExpanded(record);
+            }}
+          />
+        );
+      },
+    },
+    {
+      key: "itemId",
+      title: "ID",
+      render: (_: unknown, record) => (
+        <span style={{ paddingLeft: record.depth * 24, display: "inline-block" }}>
+          {record.item.itemId}
+        </span>
+      ),
+    },
+    { key: "title", title: "标题", ellipsis: true, sorter: true, render: (_: unknown, record) => record.item.title },
+    { key: "kind", title: "类型", render: (_: unknown, record) => <Tag>{kindLabelMap[record.item.kind]}</Tag> },
+    { key: "status", title: "状态", render: (_: unknown, record) => <Tag>{record.item.status}</Tag> },
+    { key: "priority", title: "优先级", render: (_: unknown, record) => <Tag color="orange">{record.item.priority}</Tag> },
+    { key: "owner", title: "负责人", render: (_: unknown, record) => record.item.owner },
+    { key: "effort", title: "工作量(人天)", render: (_: unknown, record) => record.item.effort ?? "-" },
+    { key: "planMonth", title: "计划月份", render: (_: unknown, record) => record.item.planMonth ?? "-" },
+    { key: "plannedHours", title: "计划工时", render: (_: unknown, record) => record.item.plannedHours ?? "-" },
+    { key: "actualHours", title: "实际工时", render: (_: unknown, record) => record.item.actualHours ?? "-" },
+    { key: "dueDate", title: "到期日", render: (_: unknown, record) => record.item.dueDate ?? "-" },
+    {
+      key: "updatedAt",
+      title: "更新时间",
+      sorter: true,
+      render: (_: unknown, record) => new Date(record.item.updatedAt * 1000).toLocaleString(),
+    },
+  ];
+
+  const visibleColumnKeys = useMemo(
+    () =>
+      [...columnConfigs]
+        .sort((a, b) => a.order - b.order)
+        .filter((v) => v.visible)
+        .map((v) => v.columnKey),
+    [columnConfigs],
+  );
+
+  const tableColumns = useMemo(() => {
+    const map = new Map(baseColumns.map((col) => [String(col.key), col]));
+    const ordered = visibleColumnKeys
+      .map((key) => map.get(key))
+      .filter((col): col is NonNullable<typeof col> => Boolean(col));
+    const resized = ordered.map((col) => {
+      const key = String(col.key);
+      if (key === "expand") return col;
+      const columnKey = key as BoardColumnKey;
+      const width = columnWidths[columnKey];
+      return {
+        ...col,
+        width,
+        onHeaderCell: () => ({
+          width,
+          onResizeStop: (nextWidth: number) => {
+            const safeWidth = Math.max(80, Math.floor(nextWidth));
+            setColumnWidths((prev) => {
+              const next = { ...prev, [columnKey]: safeWidth };
+              localStorage.setItem(COLUMN_WIDTH_KEY, JSON.stringify(next));
+              return next;
+            });
+          },
+        }),
+      };
+    });
+    return [baseColumns[0], ...resized.filter((col) => String(col.key) !== "expand")];
+  }, [baseColumns, columnWidths, visibleColumnKeys]);
+
+  const tableScrollX = useMemo(() => {
+    const visibleWidth = visibleColumnKeys.reduce((sum, key) => sum + columnWidths[key], 0);
+    return visibleWidth + 80;
+  }, [columnWidths, visibleColumnKeys]);
+
+  return (
+    <div>
+      {contextHolder}
+      <Tabs activeKey={activeKey} onChange={(key) => navigate(`/boards?tab=${key}`)} items={tabOptions} />
+      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+        <Space style={{ justifyContent: "space-between", width: "100%" }}>
+          <Space wrap>
+            <Input.Search
+              placeholder="搜索标题/ID/负责人"
+              style={{ width: 280 }}
+              allowClear
+              onSearch={(value) => setKeyword(value.trim())}
+            />
+            <Input
+              placeholder="状态筛选（输入）"
+              style={{ width: 180 }}
+              value={status}
+              onChange={(e) => setStatus(e.target.value || undefined)}
+            />
+            <Select
+              style={{ width: 180 }}
+              placeholder="负责人筛选"
+              allowClear
+              value={owner}
+              onChange={(value) => setOwner(value)}
+              options={ownerOptions.map((value) => ({ label: value, value }))}
+            />
+          </Space>
+          <Space>
+            <Button icon={<SettingOutlined />} onClick={() => setColumnDrawerOpen(true)}>
+              列设置
+            </Button>
+            <Button onClick={() => void fetchRootItems()}>刷新</Button>
+          </Space>
+        </Space>
+        <Table<BoardRow>
+          rowKey="key"
+          loading={loading}
+          columns={tableColumns}
+          dataSource={tableData}
+          tableLayout="fixed"
+          scroll={{ x: tableScrollX }}
+          components={{ header: { cell: ResizableHeaderCell } }}
+          pagination={false}
+          onChange={(_pagination, _filters, sorter) => {
+            if (!Array.isArray(sorter) && sorter.field) {
+              const field = String(sorter.field);
+              if (field === "updatedAt" || field === "title") {
+                setSortField(field);
+                setSortOrder(sorter.order ?? undefined);
+              }
+            } else {
+              setSortField(undefined);
+              setSortOrder(undefined);
+            }
+          }}
+          onRow={(record) => ({
+            onClick: () => {
+              void toggleExpanded(record);
+            },
+            style: { cursor: "pointer" },
+          })}
+        />
+      </Space>
+      <ColumnSettingsModal<BoardColumnKey>
+        title="列设置"
+        open={columnDrawerOpen}
+        onClose={() => setColumnDrawerOpen(false)}
+        titleMap={columnTitleMap}
+        columnConfigs={columnConfigs}
+        setColumnConfigs={setColumnConfigs}
+        onResetDefault={() => setColumnConfigs(defaultColumns.map((item) => ({ ...item })))}
+      />
+    </div>
+  );
+}
