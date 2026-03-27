@@ -8,13 +8,22 @@
 
 ```bash
 npm install
-npm run tauri dev
+npm run dev
 ```
 
-仅前端：
+仅前端（不启动 Tauri 窗口）：
 
 ```bash
-npm run dev
+npm run dev:web
+```
+
+## 代码风格
+
+```bash
+npm run lint
+npm run lint:fix
+npm run format
+npm run format:check
 ```
 
 ## 构建
