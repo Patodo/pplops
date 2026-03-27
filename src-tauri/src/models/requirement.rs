@@ -12,6 +12,7 @@ pub struct Model {
     pub owner: String,
     pub effort: f64,
     pub plan_month: String,
+    pub content: String,
     pub updated_at: i64,
     pub created_at: i64,
 }

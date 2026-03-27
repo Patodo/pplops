@@ -35,6 +35,7 @@ pub struct RequirementUpdateInput {
     pub owner: String,
     pub effort: f64,
     pub plan_month: String,
+    pub content: Option<String>,
     pub updated_at: i64,
 }
 
@@ -152,8 +153,15 @@ pub async fn update_requirement(
     active.owner = Set(input.owner);
     active.effort = Set(input.effort);
     active.plan_month = Set(input.plan_month);
+    if let Some(content) = input.content {
+        active.content = Set(content);
+    }
     active.updated_at = Set(input.updated_at);
     active.update(db).await
+}
+
+pub async fn get_requirement_by_id(db: &DatabaseConnection, id: i32) -> Result<Option<Model>, sea_orm::DbErr> {
+    Entity::find_by_id(id).one(db).await
 }
 
 pub async fn delete_requirement(db: &DatabaseConnection, id: i32) -> Result<(), sea_orm::DbErr> {

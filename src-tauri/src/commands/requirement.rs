@@ -49,3 +49,13 @@ pub async fn delete_requirement(state: tauri::State<'_, AppState>, id: i32) -> R
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_requirement_detail(
+    state: tauri::State<'_, AppState>,
+    id: i32,
+) -> Result<services::requirement::RequirementDto, String> {
+    services::requirement::get_requirement_detail(&state.db, id)
+        .await
+        .map_err(|e| e.to_string())
+}

@@ -33,6 +33,7 @@ pub fn run() {
             commands::create_requirement,
             commands::update_requirement,
             commands::delete_requirement,
+            commands::get_requirement_detail,
             commands::planning_ping,
             commands::member_ping,
             commands::member_count,

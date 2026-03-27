@@ -19,7 +19,12 @@ export type RequirementItem = {
   owner: string;
   effort: number;
   planMonth: string;
+  content?: string;
   updatedAt: number;
+};
+
+export type RequirementDetail = RequirementItem & {
+  content: string;
 };
 
 export type RequirementListQuery = {
@@ -50,6 +55,11 @@ export type CreateRequirementPayload = {
 
 export type UpdateRequirementPayload = CreateRequirementPayload & {
   id: number;
+  content?: string;
+};
+
+export type UpdateRequirementDetailPayload = UpdateRequirementPayload & {
+  content: string;
 };
 
 export type RequirementColumnKey =

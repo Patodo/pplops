@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CreateRequirementPayload,
+  RequirementDetail,
   RequirementItem,
   RequirementListQuery,
   RequirementListResult,
+  UpdateRequirementDetailPayload,
   UpdateRequirementPayload,
 } from "@/types/requirement";
 
@@ -35,4 +37,14 @@ export async function updateRequirement(
 
 export async function deleteRequirement(id: number): Promise<void> {
   return invoke<void>("delete_requirement", { id });
+}
+
+export async function getRequirementDetail(id: number): Promise<RequirementDetail> {
+  return invoke<RequirementDetail>("get_requirement_detail", { id });
+}
+
+export async function updateRequirementDetail(
+  payload: UpdateRequirementDetailPayload,
+): Promise<RequirementItem> {
+  return invoke<RequirementItem>("update_requirement", { payload });
 }

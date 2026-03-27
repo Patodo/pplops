@@ -40,3 +40,12 @@ body {
   pointer-events: none;
   z-index: 2;
 }
+
+.markdown-body {
+  box-sizing: border-box;
+  min-width: 200px;
+  max-width: 100%;
+  margin: 0;
+  padding: 12px 16px;
+  background: transparent;
+}
