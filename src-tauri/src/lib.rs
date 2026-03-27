@@ -45,6 +45,12 @@ pub fn run() {
             commands::get_member_detail,
             commands::workload_ping,
             commands::task_ping,
+            commands::list_tasks,
+            commands::list_task_requirements,
+            commands::create_task,
+            commands::update_task,
+            commands::delete_task,
+            commands::get_task_detail,
             commands::meeting_ping,
             commands::report_ping,
         ])

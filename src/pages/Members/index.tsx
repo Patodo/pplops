@@ -153,18 +153,15 @@ function ResizableHeaderCell(
   },
 ) {
   const { onResizeStop, width, ...restProps } = props;
-  const [innerWidth, setInnerWidth] = useState<number | undefined>(width);
   const [dragDelta, setDragDelta] = useState(0);
   const [dragging, setDragging] = useState(false);
-
-  useEffect(() => setInnerWidth(width), [width]);
-  if (!innerWidth || !onResizeStop) return <th {...restProps} />;
+  if (!width || !onResizeStop) return <th {...restProps} />;
 
   const handleMouseDown: React.MouseEventHandler<HTMLSpanElement> = (event) => {
     event.preventDefault();
     event.stopPropagation();
     const startX = event.clientX;
-    const startWidth = innerWidth;
+    const startWidth = width;
     let latestWidth = startWidth;
     setDragging(true);
     setDragDelta(0);
@@ -191,9 +188,9 @@ function ResizableHeaderCell(
       {...restProps}
       style={{
         ...restProps.style,
-        width: innerWidth,
-        minWidth: innerWidth,
-        maxWidth: innerWidth,
+        width,
+        minWidth: width,
+        maxWidth: width,
       }}
       className={[restProps.className, "resizable-header-cell"].filter(Boolean).join(" ")}
     >

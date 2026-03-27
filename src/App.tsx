@@ -13,7 +13,8 @@ import GanttChartPage from "@/pages/Planning/Gantt";
 import MembersListPage from "@/pages/Members";
 import MemberDetailPage from "@/pages/Members/Detail";
 import SkillsMatrixPage from "@/pages/Members/Skills";
-import TasksBoardPage from "@/pages/Tasks";
+import TasksListPage from "@/pages/Tasks";
+import TasksBoardPage from "@/pages/Tasks/Board";
 import TaskDetailPage from "@/pages/Tasks/Detail";
 import WorkloadOverviewPage from "@/pages/Workload";
 import WorkloadVerifyPage from "@/pages/Workload/Verify";
@@ -39,7 +40,8 @@ function App() {
             <Route path="members" element={<MembersListPage />} />
             <Route path="members/skills" element={<SkillsMatrixPage />} />
             <Route path="members/:id" element={<MemberDetailPage />} />
-            <Route path="tasks" element={<TasksBoardPage />} />
+            <Route path="tasks" element={<TasksListPage />} />
+            <Route path="tasks/board" element={<TasksBoardPage />} />
             <Route path="tasks/:id" element={<TaskDetailPage />} />
             <Route path="workload" element={<WorkloadOverviewPage />} />
             <Route path="workload/verify" element={<WorkloadVerifyPage />} />
