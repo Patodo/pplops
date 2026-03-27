@@ -158,6 +158,7 @@ export default function BoardsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [parentOptions, setParentOptions] = useState<WorkItemParentOption[]>([]);
+  const [createContext, setCreateContext] = useState<{ kind: WorkItemKind; parentId?: number }>();
   const [createForm] = Form.useForm<{ title: string; owner: string; parentId?: number }>();
   const [columnConfigs, setColumnConfigs] = useState<CommonColumnConfig<BoardColumnKey>[]>(
     loadColumnsFromStorage(),
@@ -200,11 +201,13 @@ export default function BoardsPage() {
   }, [activeKey]);
 
   const createLabel = useMemo(() => {
-    if (createKind === "project") return "新增项目";
-    if (createKind === "requirement") return "新增需求";
-    if (createKind === "task") return "新增任务";
+    const kind = createContext?.kind ?? createKind;
+    if (kind === "project") return "新增项目";
+    if (kind === "requirement") return "新增需求";
+    if (kind === "task") return "新增任务";
+    if (kind === "subtask") return "新增子任务";
     return "";
-  }, [createKind]);
+  }, [createContext?.kind, createKind]);
 
   const fetchRootItems = useCallback(async () => {
     setLoading(true);
@@ -237,14 +240,19 @@ export default function BoardsPage() {
   }, [columnConfigs]);
 
   useEffect(() => {
-    if (!createOpen || !createKind) return;
+    if (!createOpen) return;
+    const kind = createContext?.kind ?? createKind;
+    const fixedParentId = createContext?.parentId;
+    if (!kind) return;
     const loadParents = async () => {
       try {
-        if (createKind === "requirement") {
+        if (kind === "requirement") {
+          if (typeof fixedParentId === "number") return;
           setParentOptions(await listParentProjects());
           return;
         }
-        if (createKind === "task") {
+        if (kind === "task") {
+          if (typeof fixedParentId === "number") return;
           setParentOptions(await listParentRequirements());
           return;
         }
@@ -255,7 +263,7 @@ export default function BoardsPage() {
       }
     };
     void loadParents();
-  }, [createKind, createOpen, messageApi]);
+  }, [createContext?.kind, createContext?.parentId, createKind, createOpen, messageApi]);
 
   const toggleExpanded = useCallback(
     async (row: BoardRow) => {
@@ -372,34 +380,13 @@ export default function BoardsPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!nextKind) return;
-                  void (async () => {
-                    try {
-                      const created = await createWorkItem({
-                        kind: nextKind,
-                        parentId: record.item.id,
-                        title: `新建${kindLabelMap[nextKind]}`,
-                        status: getDefaultStatus(nextKind),
-                        priority: "medium",
-                        owner: record.item.owner || "未分配",
-                        effort: nextKind === "requirement" ? 0 : undefined,
-                        planMonth: nextKind === "requirement" ? "" : undefined,
-                        plannedHours: nextKind === "task" || nextKind === "subtask" ? 0 : undefined,
-                        actualHours: nextKind === "task" || nextKind === "subtask" ? 0 : undefined,
-                        dueDate: nextKind === "task" || nextKind === "subtask" ? "" : undefined,
-                      });
-                      messageApi.success(`已新增${kindLabelMap[nextKind]}：${created.itemId}`);
-                      if (expandedIds.includes(record.item.id)) {
-                        const currentChildren = childrenByParent[record.item.id] ?? [];
-                        setChildrenByParent((prev) => ({
-                          ...prev,
-                          [record.item.id]: [created, ...currentChildren],
-                        }));
-                      }
-                      void fetchRootItems();
-                    } catch (error) {
-                      messageApi.error(`分解失败: ${String(error)}`);
-                    }
-                  })();
+                  setCreateContext({ kind: nextKind, parentId: record.item.id });
+                  createForm.setFieldsValue({
+                    parentId: record.item.id,
+                    title: `新建${kindLabelMap[nextKind]}`,
+                    owner: record.item.owner || "未分配",
+                  });
+                  setCreateOpen(true);
                 }}
               />
             </Tooltip>
@@ -516,6 +503,7 @@ export default function BoardsPage() {
             type="primary"
             onClick={() => {
               createForm.resetFields();
+              setCreateContext({ kind: createKind });
               setCreateOpen(true);
             }}
           >
@@ -596,28 +584,33 @@ export default function BoardsPage() {
         title={createLabel}
         open={createOpen}
         confirmLoading={creating}
-        onCancel={() => setCreateOpen(false)}
+        onCancel={() => {
+          setCreateOpen(false);
+          setCreateContext(undefined);
+        }}
         onOk={() => {
-          if (!createKind) return;
+          const kind = createContext?.kind ?? createKind;
+          if (!kind) return;
           void (async () => {
             setCreating(true);
             try {
               const values = await createForm.validateFields();
               await createWorkItem({
-                kind: createKind,
+                kind,
                 parentId: values.parentId,
                 title: values.title,
-                status: getDefaultStatus(createKind),
+                status: getDefaultStatus(kind),
                 priority: "medium",
                 owner: values.owner,
-                effort: createKind === "requirement" ? 0 : undefined,
-                planMonth: createKind === "requirement" ? "" : undefined,
-                plannedHours: createKind === "task" ? 0 : undefined,
-                actualHours: createKind === "task" ? 0 : undefined,
-                dueDate: createKind === "task" ? "" : undefined,
+                effort: kind === "requirement" ? 0 : undefined,
+                planMonth: kind === "requirement" ? "" : undefined,
+                plannedHours: kind === "task" || kind === "subtask" ? 0 : undefined,
+                actualHours: kind === "task" || kind === "subtask" ? 0 : undefined,
+                dueDate: kind === "task" || kind === "subtask" ? "" : undefined,
               });
               messageApi.success(`${createLabel}成功`);
               setCreateOpen(false);
+              setCreateContext(undefined);
               void fetchRootItems();
             } catch (error) {
               messageApi.error(`创建失败: ${String(error)}`);
@@ -628,9 +621,11 @@ export default function BoardsPage() {
         }}
       >
         <Form form={createForm} layout="vertical">
-          {(createKind === "requirement" || createKind === "task") && (
+          {((createContext?.kind ?? createKind) === "requirement" ||
+            (createContext?.kind ?? createKind) === "task") &&
+            typeof createContext?.parentId !== "number" && (
             <Form.Item
-              label={createKind === "requirement" ? "所属项目" : "所属需求"}
+              label={(createContext?.kind ?? createKind) === "requirement" ? "所属项目" : "所属需求"}
               name="parentId"
               rules={[{ required: true, message: "请选择上级" }]}
             >
@@ -642,6 +637,11 @@ export default function BoardsPage() {
                 }))}
                 placeholder="请选择"
               />
+            </Form.Item>
+          )}
+          {typeof createContext?.parentId === "number" && (
+            <Form.Item label="上级" name="parentId">
+              <Input disabled />
             </Form.Item>
           )}
           <Form.Item label="标题" name="title" rules={[{ required: true, message: "请输入标题" }]}>
