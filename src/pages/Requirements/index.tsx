@@ -31,10 +31,12 @@ import type { TableProps } from "antd";
 import {
   CheckSquareOutlined,
   DeleteOutlined,
+  DownOutlined,
   EditOutlined,
   HolderOutlined,
   MinusSquareOutlined,
   ReloadOutlined,
+  RightOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
@@ -52,6 +54,12 @@ import type {
   RequirementItem,
   UpdateRequirementPayload,
 } from "@/types/requirement";
+import { listTasks } from "@/api/task";
+import type { TaskItem } from "@/types/task";
+
+type RequirementTableRow =
+  | { kind: "requirement"; requirement: RequirementItem }
+  | { kind: "task"; requirement: RequirementItem; task: TaskItem };
 
 const { Title } = Typography;
 const COLUMN_CONFIG_KEY = "pplops.requirements.columns";
@@ -336,6 +344,11 @@ export default function RequirementsListPage() {
   const [columnWidths, setColumnWidths] = useState<Record<RequirementColumnKey, number>>(
     loadColumnWidthsFromStorage(),
   );
+  const [expandedRequirementIds, setExpandedRequirementIds] = useState<number[]>([]);
+  const [tasksByRequirement, setTasksByRequirement] = useState<Record<number, TaskItem[]>>({});
+  const [loadingTaskByRequirement, setLoadingTaskByRequirement] = useState<
+    Record<number, boolean>
+  >({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -379,91 +392,121 @@ export default function RequirementsListPage() {
     localStorage.setItem(COLUMN_CONFIG_KEY, JSON.stringify(columnConfigs));
   }, [columnConfigs]);
 
-  const baseColumns = useMemo<NonNullable<TableProps<RequirementItem>["columns"]>>(
+  const baseColumns = useMemo<NonNullable<TableProps<RequirementTableRow>["columns"]>>(
     () => [
-      { key: "reqId", dataIndex: "reqId", title: "需求ID", width: 130 },
+      {
+        key: "reqId",
+        title: "ID",
+        width: 130,
+        render: (_: unknown, record: RequirementTableRow) => {
+          if (record.kind === "requirement") {
+            return record.requirement.reqId;
+          }
+          return (
+            <span style={{ paddingLeft: 32, display: "inline-block", width: "100%", boxSizing: "border-box" }}>
+              {record.task.taskId}
+            </span>
+          );
+        },
+      },
       { key: "title", dataIndex: "title", title: "标题", ellipsis: true, width: 320 },
       {
         key: "status",
-        dataIndex: "status",
         title: "状态",
-        render: (value: string) => <Tag>{value}</Tag>,
+        render: (_: unknown, record: RequirementTableRow) => {
+          const value = record.kind === "requirement" ? record.requirement.status : record.task.status;
+          return <Tag>{value}</Tag>;
+        },
       },
       {
         key: "priority",
-        dataIndex: "priority",
         title: "优先级",
         sorter: true,
-        render: (value: string) => <Tag color="orange">{value}</Tag>,
+        render: (_: unknown, record: RequirementTableRow) => {
+          const value = record.kind === "requirement" ? record.requirement.priority : record.task.priority;
+          return <Tag color="orange">{value}</Tag>;
+        },
       },
-      { key: "owner", dataIndex: "owner", title: "负责人", width: 160 },
+      {
+        key: "owner",
+        title: "负责人",
+        width: 160,
+        render: (_: unknown, record: RequirementTableRow) =>
+          record.kind === "requirement" ? record.requirement.owner : record.task.owner,
+      },
       {
         key: "effort",
-        dataIndex: "effort",
         title: "工作量(人天)",
         sorter: true,
+        render: (_: unknown, record: RequirementTableRow) =>
+          record.kind === "requirement" ? record.requirement.effort : null,
       },
       {
         key: "planMonth",
-        dataIndex: "planMonth",
         title: "计划月份",
         sorter: true,
+        render: (_: unknown, record: RequirementTableRow) =>
+          record.kind === "requirement" ? record.requirement.planMonth : null,
       },
       {
         key: "updatedAt",
-        dataIndex: "updatedAt",
         title: "更新时间",
         sorter: true,
-        render: (value: number) => new Date(value * 1000).toLocaleString(),
+        render: (_: unknown, record: RequirementTableRow) => {
+          const value =
+            record.kind === "requirement" ? record.requirement.updatedAt : record.task.updatedAt;
+          return new Date(value * 1000).toLocaleString();
+        },
       },
       {
         key: "actions",
         title: "操作",
         width: 110,
-        render: (_: unknown, record: RequirementItem) => (
-          <Space>
-            <Button
-              size="small"
-              type="text"
-              icon={<EditOutlined />}
-              title="编辑"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingItem(record);
-                editingForm.setFieldsValue({
-                  id: record.id,
-                  title: record.title,
-                  status: record.status,
-                  priority: record.priority,
-                  owner: record.owner,
-                  effort: record.effort,
-                  planMonth: record.planMonth,
-                });
-              }}
-            />
-            <Popconfirm
-              title="确认删除该需求？"
-              onConfirm={async (e) => {
-                e?.stopPropagation();
-                await deleteRequirement(record.id);
-                messageApi.success("删除成功");
-                await fetchData();
-                await fetchOwners();
-              }}
-            >
+        render: (_: unknown, record: RequirementTableRow) =>
+          record.kind === "requirement" ? (
+            <Space>
               <Button
                 size="small"
                 type="text"
-                danger
-                icon={<DeleteOutlined />}
-                title="删除"
+                icon={<EditOutlined />}
+                title="编辑"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setEditingItem(record.requirement);
+                  editingForm.setFieldsValue({
+                    id: record.requirement.id,
+                    title: record.requirement.title,
+                    status: record.requirement.status,
+                    priority: record.requirement.priority,
+                    owner: record.requirement.owner,
+                    effort: record.requirement.effort,
+                    planMonth: record.requirement.planMonth,
+                  });
                 }}
               />
-            </Popconfirm>
-          </Space>
-        ),
+              <Popconfirm
+                title="确认删除该需求？"
+                onConfirm={async (e) => {
+                  e?.stopPropagation();
+                  await deleteRequirement(record.requirement.id);
+                  messageApi.success("删除成功");
+                  await fetchData();
+                  await fetchOwners();
+                }}
+              >
+                <Button
+                  size="small"
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  title="删除"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                />
+              </Popconfirm>
+            </Space>
+          ) : null,
       },
     ],
     [editingForm, fetchData, fetchOwners, messageApi],
@@ -493,7 +536,28 @@ export default function RequirementsListPage() {
     const actions = map.get("actions");
     const merged = actions ? [...ordered, actions] : ordered;
 
-    return merged.map((col) => {
+    const expandColumn: NonNullable<TableProps<RequirementTableRow>["columns"]>[number] = {
+      key: "expand",
+      width: 48,
+      fixed: "left",
+      render: (_: unknown, record: RequirementTableRow) => {
+        if (record.kind !== "requirement") return null;
+        const expanded = expandedRequirementIds.includes(record.requirement.id);
+        return (
+          <Button
+            type="text"
+            size="small"
+            icon={expanded ? <DownOutlined /> : <RightOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              void toggleExpanded(record.requirement);
+            }}
+          />
+        );
+      },
+    };
+
+    const restColumns = merged.map((col) => {
       const key = String(col.key);
       if (key === "actions") {
         return col;
@@ -516,6 +580,8 @@ export default function RequirementsListPage() {
         }),
       };
     });
+
+    return [expandColumn, ...restColumns];
   }, [baseColumns, columnWidths, visibleColumnKeys]);
 
   const handleTableChange: TableProps<RequirementItem>["onChange"] = (
@@ -541,6 +607,50 @@ export default function RequirementsListPage() {
       setSortOrder(undefined);
     }
   };
+
+  const toggleExpanded = useCallback(
+    async (record: RequirementItem) => {
+      const key = record.id;
+      const expanded = expandedRequirementIds.includes(key);
+      if (expanded) {
+        setExpandedRequirementIds((prev) => prev.filter((k) => k !== key));
+        return;
+      }
+      setExpandedRequirementIds((prev) => [...prev, key]);
+      if (tasksByRequirement[key]) {
+        return;
+      }
+      setLoadingTaskByRequirement((prev) => ({ ...prev, [key]: true }));
+      try {
+        const result = await listTasks({
+          page: 1,
+          pageSize: 200,
+          requirementId: key,
+        });
+        setTasksByRequirement((prev) => ({ ...prev, [key]: result.items }));
+      } catch (error) {
+        messageApi.error(`加载关联任务失败: ${String(error)}`);
+        setTasksByRequirement((prev) => ({ ...prev, [key]: [] }));
+      } finally {
+        setLoadingTaskByRequirement((prev) => ({ ...prev, [key]: false }));
+      }
+    },
+    [expandedRequirementIds, messageApi, tasksByRequirement],
+  );
+
+  const tableData = useMemo<RequirementTableRow[]>(() => {
+    const rows: RequirementTableRow[] = [];
+    for (const req of items) {
+      rows.push({ kind: "requirement", requirement: req });
+      if (expandedRequirementIds.includes(req.id)) {
+        const tasks = tasksByRequirement[req.id] ?? [];
+        for (const task of tasks) {
+          rows.push({ kind: "task", requirement: req, task });
+        }
+      }
+    }
+    return rows;
+  }, [expandedRequirementIds, items, tasksByRequirement]);
 
   return (
     <div>
@@ -598,8 +708,12 @@ export default function RequirementsListPage() {
           <Button onClick={() => void fetchData()}>刷新</Button>
         </Space>
 
-        <Table<RequirementItem>
-          rowKey="id"
+        <Table<RequirementTableRow>
+          rowKey={(record) =>
+            record.kind === "requirement"
+              ? `req-${record.requirement.id}`
+              : `task-${record.task.id}`
+          }
           loading={loading}
           columns={tableColumns}
           tableLayout="fixed"
@@ -609,7 +723,7 @@ export default function RequirementsListPage() {
               cell: ResizableHeaderCell,
             },
           }}
-          dataSource={items}
+          dataSource={tableData}
           pagination={{
             current: page,
             pageSize,
@@ -617,9 +731,19 @@ export default function RequirementsListPage() {
             showSizeChanger: true,
           }}
           onChange={handleTableChange}
-          onRow={(record) => ({
-            onClick: () => navigate(`/requirements/${record.id}`),
-          })}
+          onRow={(record) =>
+            record.kind === "requirement"
+              ? {
+                  onClick: () => {
+                    void toggleExpanded(record.requirement);
+                  },
+                  style: { cursor: "pointer" },
+                }
+              : {
+                  onClick: () => navigate(`/tasks/${record.task.id}`),
+                  style: { cursor: "pointer" },
+                }
+          }
         />
       </Space>
 
