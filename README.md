@@ -11,6 +11,8 @@ npm install
 npm run dev
 ```
 
+`dev` 脚本为 `tauri dev` 时，`beforeDevCommand` 必须只启动前端（本仓库为 `npm run dev:web`），不能再用 `npm run dev`，否则会递归调用 Tauri。
+
 仅前端（不启动 Tauri 窗口）：
 
 ```bash
