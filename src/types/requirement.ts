@@ -13,6 +13,7 @@ export type RequirementPriority = "low" | "medium" | "high" | "critical";
 export type RequirementItem = {
   id: number;
   reqId: string;
+  projectId?: number;
   title: string;
   status: string;
   priority: string;
@@ -28,6 +29,7 @@ export type RequirementDetail = RequirementItem & {
 };
 
 export type RequirementListQuery = {
+  projectId?: number;
   page: number;
   pageSize: number;
   keyword?: string;
@@ -45,6 +47,7 @@ export type RequirementListResult = {
 };
 
 export type CreateRequirementPayload = {
+  projectId: number;
   title: string;
   status: string;
   priority: string;

@@ -3,6 +3,7 @@ pub mod m20260327_000002_create_requirement;
 pub mod m20260327_000003_add_requirement_content;
 pub mod m20260327_000004_expand_member_fields;
 pub mod m20260327_000005_create_task;
+pub mod m20260327_000006_create_work_item;
 
 use sea_orm_migration::prelude::*;
 
@@ -17,6 +18,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260327_000003_add_requirement_content::Migration),
             Box::new(m20260327_000004_expand_member_fields::Migration),
             Box::new(m20260327_000005_create_task::Migration),
+            Box::new(m20260327_000006_create_work_item::Migration),
         ]
     }
 }

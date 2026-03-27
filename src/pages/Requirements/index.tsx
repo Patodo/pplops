@@ -43,10 +43,12 @@ import { useNavigate } from "react-router-dom";
 import {
   createRequirement,
   deleteRequirement,
+  listRequirementProjects,
   listRequirementOwners,
   listRequirements,
   updateRequirement,
 } from "@/api/requirement";
+import { createWorkItem } from "@/api/work-item";
 import type {
   CreateRequirementPayload,
   RequirementColumnConfig,
@@ -325,6 +327,9 @@ export default function RequirementsListPage() {
 
   const [items, setItems] = useState<RequirementItem[]>([]);
   const [owners, setOwners] = useState<string[]>([]);
+  const [projects, setProjects] = useState<Array<{ id: number; projId: string; title: string }>>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState<string>();
@@ -336,6 +341,8 @@ export default function RequirementsListPage() {
   const [sortOrder, setSortOrder] = useState<"ascend" | "descend" | undefined>();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [projectForm] = Form.useForm<{ title: string; owner: string }>();
   const [editingItem, setEditingItem] = useState<RequirementItem | null>(null);
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false);
   const [columnConfigs, setColumnConfigs] = useState<RequirementColumnConfig[]>(
@@ -346,9 +353,6 @@ export default function RequirementsListPage() {
   );
   const [expandedRequirementIds, setExpandedRequirementIds] = useState<number[]>([]);
   const [tasksByRequirement, setTasksByRequirement] = useState<Record<number, TaskItem[]>>({});
-  const [loadingTaskByRequirement, setLoadingTaskByRequirement] = useState<
-    Record<number, boolean>
-  >({});
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -380,6 +384,15 @@ export default function RequirementsListPage() {
     }
   }, []);
 
+  const fetchProjects = useCallback(async () => {
+    try {
+      const rows = await listRequirementProjects();
+      setProjects(rows);
+    } catch {
+      setProjects([]);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
@@ -387,6 +400,10 @@ export default function RequirementsListPage() {
   useEffect(() => {
     void fetchOwners();
   }, [fetchOwners]);
+
+  useEffect(() => {
+    void fetchProjects();
+  }, [fetchProjects]);
 
   useEffect(() => {
     localStorage.setItem(COLUMN_CONFIG_KEY, JSON.stringify(columnConfigs));
@@ -409,7 +426,14 @@ export default function RequirementsListPage() {
           );
         },
       },
-      { key: "title", dataIndex: "title", title: "标题", ellipsis: true, width: 320 },
+      {
+        key: "title",
+        title: "标题",
+        ellipsis: true,
+        width: 320,
+        render: (_: unknown, record: RequirementTableRow) =>
+          record.kind === "requirement" ? record.requirement.title : record.task.title,
+      },
       {
         key: "status",
         title: "状态",
@@ -475,6 +499,7 @@ export default function RequirementsListPage() {
                   setEditingItem(record.requirement);
                   editingForm.setFieldsValue({
                     id: record.requirement.id,
+                  projectId: record.requirement.projectId,
                     title: record.requirement.title,
                     status: record.requirement.status,
                     priority: record.requirement.priority,
@@ -527,6 +552,33 @@ export default function RequirementsListPage() {
     const visibleWidth = visibleColumnKeys.reduce((sum, key) => sum + columnWidths[key], 0);
     return visibleWidth + 180;
   }, [columnWidths, visibleColumnKeys]);
+
+  const toggleExpanded = useCallback(
+    async (record: RequirementItem) => {
+      const key = record.id;
+      const expanded = expandedRequirementIds.includes(key);
+      if (expanded) {
+        setExpandedRequirementIds((prev) => prev.filter((k) => k !== key));
+        return;
+      }
+      setExpandedRequirementIds((prev) => [...prev, key]);
+      if (tasksByRequirement[key]) {
+        return;
+      }
+      try {
+        const result = await listTasks({
+          page: 1,
+          pageSize: 200,
+          requirementId: key,
+        });
+        setTasksByRequirement((prev) => ({ ...prev, [key]: result.items }));
+      } catch (error) {
+        messageApi.error(`加载关联任务失败: ${String(error)}`);
+        setTasksByRequirement((prev) => ({ ...prev, [key]: [] }));
+      }
+    },
+    [expandedRequirementIds, messageApi, tasksByRequirement],
+  );
 
   const tableColumns = useMemo(() => {
     const map = new Map(baseColumns.map((col) => [String(col.key), col]));
@@ -582,9 +634,9 @@ export default function RequirementsListPage() {
     });
 
     return [expandColumn, ...restColumns];
-  }, [baseColumns, columnWidths, visibleColumnKeys]);
+  }, [baseColumns, columnWidths, expandedRequirementIds, toggleExpanded, visibleColumnKeys]);
 
-  const handleTableChange: TableProps<RequirementItem>["onChange"] = (
+  const handleTableChange: TableProps<RequirementTableRow>["onChange"] = (
     pagination,
     _filters,
     sorter,
@@ -607,36 +659,6 @@ export default function RequirementsListPage() {
       setSortOrder(undefined);
     }
   };
-
-  const toggleExpanded = useCallback(
-    async (record: RequirementItem) => {
-      const key = record.id;
-      const expanded = expandedRequirementIds.includes(key);
-      if (expanded) {
-        setExpandedRequirementIds((prev) => prev.filter((k) => k !== key));
-        return;
-      }
-      setExpandedRequirementIds((prev) => [...prev, key]);
-      if (tasksByRequirement[key]) {
-        return;
-      }
-      setLoadingTaskByRequirement((prev) => ({ ...prev, [key]: true }));
-      try {
-        const result = await listTasks({
-          page: 1,
-          pageSize: 200,
-          requirementId: key,
-        });
-        setTasksByRequirement((prev) => ({ ...prev, [key]: result.items }));
-      } catch (error) {
-        messageApi.error(`加载关联任务失败: ${String(error)}`);
-        setTasksByRequirement((prev) => ({ ...prev, [key]: [] }));
-      } finally {
-        setLoadingTaskByRequirement((prev) => ({ ...prev, [key]: false }));
-      }
-    },
-    [expandedRequirementIds, messageApi, tasksByRequirement],
-  );
 
   const tableData = useMemo<RequirementTableRow[]>(() => {
     const rows: RequirementTableRow[] = [];
@@ -661,6 +683,7 @@ export default function RequirementsListPage() {
             需求列表
           </Title>
           <Space>
+            <Button onClick={() => setCreateProjectOpen(true)}>新增项目</Button>
             <Button
               icon={<SettingOutlined />}
               onClick={() => setColumnDrawerOpen(true)}
@@ -748,6 +771,35 @@ export default function RequirementsListPage() {
       </Space>
 
       <Modal
+        title="新增项目"
+        open={createProjectOpen}
+        onCancel={() => setCreateProjectOpen(false)}
+        onOk={async () => {
+          const values = await projectForm.validateFields();
+          await createWorkItem({
+            kind: "project",
+            title: values.title,
+            owner: values.owner,
+            status: "active",
+            priority: "medium",
+          });
+          messageApi.success("项目创建成功");
+          setCreateProjectOpen(false);
+          projectForm.resetFields();
+          await fetchProjects();
+        }}
+      >
+        <Form form={projectForm} layout="vertical" initialValues={{ owner: "未分配" }}>
+          <Form.Item label="项目名称" name="title" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item label="负责人" name="owner" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
         title="新增需求"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
@@ -765,6 +817,7 @@ export default function RequirementsListPage() {
           layout="vertical"
           form={form}
           initialValues={{
+            projectId: projects[0]?.id,
             status: "new",
             priority: "medium",
             owner: "未分配",
@@ -772,6 +825,14 @@ export default function RequirementsListPage() {
             planMonth: "2026-03",
           }}
         >
+          <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}>
+            <Select
+              options={projects.map((p) => ({
+                label: `${p.projId} - ${p.title}`,
+                value: p.id,
+              }))}
+            />
+          </Form.Item>
           <Form.Item label="标题" name="title" rules={[{ required: true }]}>
             <Input />
           </Form.Item>
@@ -813,6 +874,14 @@ export default function RequirementsListPage() {
         <Form<UpdateRequirementPayload> layout="vertical" form={editingForm}>
           <Form.Item name="id" hidden>
             <InputNumber />
+          </Form.Item>
+          <Form.Item label="所属项目" name="projectId" rules={[{ required: true }]}>
+            <Select
+              options={projects.map((p) => ({
+                label: `${p.projId} - ${p.title}`,
+                value: p.id,
+              }))}
+            />
           </Form.Item>
           <Form.Item label="标题" name="title" rules={[{ required: true }]}>
             <Input />

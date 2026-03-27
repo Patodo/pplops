@@ -128,6 +128,7 @@ export default function RequirementDetailPage() {
       const values = await form.validateFields();
       await updateRequirementDetail({
         id: detail.id,
+        projectId: detail.projectId ?? 0,
         title: values.title,
         status: values.status,
         priority: values.priority,

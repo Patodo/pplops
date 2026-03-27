@@ -24,8 +24,14 @@ import mermaid from "mermaid";
 import "@uiw/react-md-editor/markdown-editor.css";
 import "highlight.js/styles/github-dark.css";
 import "github-markdown-css/github-markdown.css";
-import { getTaskDetail, listTaskRequirements, updateTaskDetail } from "@/api/task";
-import type { TaskDetail, TaskRequirementOption } from "@/types/task";
+import {
+  createSubtask,
+  getTaskDetail,
+  listSubtasks,
+  listTaskRequirements,
+  updateTaskDetail,
+} from "@/api/task";
+import type { TaskDetail, TaskItem, TaskRequirementOption } from "@/types/task";
 
 const { Title } = Typography;
 const statusOptions = [
@@ -81,6 +87,9 @@ export default function TaskDetailPage() {
   const [editing, setEditing] = useState(false);
   const [detail, setDetail] = useState<TaskDetail | null>(null);
   const [requirements, setRequirements] = useState<TaskRequirementOption[]>([]);
+  const [subtasks, setSubtasks] = useState<TaskItem[]>([]);
+  const [subtaskForm] = Form.useForm<{ title: string; owner: string }>();
+  const [creatingSubtask, setCreatingSubtask] = useState(false);
   const [contentDraft, setContentDraft] = useState("");
   const taskId = Number(id);
 
@@ -93,9 +102,14 @@ export default function TaskDetailPage() {
     }
     setLoading(true);
     try {
-      const [task, reqs] = await Promise.all([getTaskDetail(taskId), listTaskRequirements()]);
+      const [task, reqs, subs] = await Promise.all([
+        getTaskDetail(taskId),
+        listTaskRequirements(),
+        listSubtasks(taskId),
+      ]);
       setDetail(task);
       setRequirements(reqs);
+      setSubtasks(subs);
       setContentDraft(task.content ?? "");
       form.setFieldsValue({
         requirementId: task.requirementId,
@@ -176,6 +190,53 @@ export default function TaskDetailPage() {
                 </Tag>
                 <Tag>到期: {detail.dueDate}</Tag>
               </Space>
+            )}
+            {!editing && (
+              <Card size="small" title={`Subtask (${subtasks.length})`}>
+                <Space direction="vertical" style={{ width: "100%" }} size={8}>
+                  {subtasks.map((sub) => (
+                    <div key={sub.id} style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>{sub.taskId} - {sub.title}</span>
+                      <Space>
+                        <Tag>{sub.status}</Tag>
+                        <Tag>{sub.owner}</Tag>
+                      </Space>
+                    </div>
+                  ))}
+                  <Form
+                    form={subtaskForm}
+                    layout="inline"
+                    initialValues={{ owner: detail.owner }}
+                    onFinish={async (values) => {
+                      setCreatingSubtask(true);
+                      try {
+                        await createSubtask({
+                          taskId: detail.id,
+                          title: values.title,
+                          owner: values.owner,
+                        });
+                        messageApi.success("Subtask 创建成功");
+                        subtaskForm.resetFields();
+                        await fetchDetail();
+                      } finally {
+                        setCreatingSubtask(false);
+                      }
+                    }}
+                  >
+                    <Form.Item name="title" rules={[{ required: true }]}>
+                      <Input placeholder="新增 Subtask 标题" />
+                    </Form.Item>
+                    <Form.Item name="owner" rules={[{ required: true }]}>
+                      <Input placeholder="负责人" />
+                    </Form.Item>
+                    <Form.Item>
+                      <Button htmlType="submit" loading={creatingSubtask}>
+                        新增 Subtask
+                      </Button>
+                    </Form.Item>
+                  </Form>
+                </Space>
+              </Card>
             )}
             <Space>
               {!editing ? (
