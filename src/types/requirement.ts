@@ -1,2 +1,69 @@
-/** 需求相关类型占位，后续与后端对齐 */
-export type RequirementId = string;
+export type RequirementId = number;
+
+export type RequirementStatus =
+  | "preparing"
+  | "new"
+  | "planned"
+  | "in_progress"
+  | "completed"
+  | "cancelled";
+
+export type RequirementPriority = "low" | "medium" | "high" | "critical";
+
+export type RequirementItem = {
+  id: number;
+  reqId: string;
+  title: string;
+  status: string;
+  priority: string;
+  owner: string;
+  effort: number;
+  planMonth: string;
+  updatedAt: number;
+};
+
+export type RequirementListQuery = {
+  page: number;
+  pageSize: number;
+  keyword?: string;
+  status?: string;
+  owner?: string;
+  sortField?: "effort" | "updatedAt" | "planMonth" | "priority";
+  sortOrder?: "ascend" | "descend";
+};
+
+export type RequirementListResult = {
+  items: RequirementItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type CreateRequirementPayload = {
+  title: string;
+  status: string;
+  priority: string;
+  owner: string;
+  effort: number;
+  planMonth: string;
+};
+
+export type UpdateRequirementPayload = CreateRequirementPayload & {
+  id: number;
+};
+
+export type RequirementColumnKey =
+  | "reqId"
+  | "title"
+  | "status"
+  | "priority"
+  | "owner"
+  | "effort"
+  | "planMonth"
+  | "updatedAt";
+
+export type RequirementColumnConfig = {
+  columnKey: RequirementColumnKey;
+  visible: boolean;
+  order: number;
+};

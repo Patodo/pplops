@@ -17,7 +17,7 @@ import {
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAppStore } from "@/stores/appStore";
 
-const { Header, Sider, Content } = Layout;
+const { Sider, Content } = Layout;
 
 type MenuItem = {
   key: string;
@@ -86,9 +86,6 @@ export function AppLayout() {
         />
       </Sider>
       <Layout className="min-w-0 h-full overflow-hidden">
-        <Header style={{ background: colorBgContainer, padding: "0 24px" }}>
-          <span className="font-medium">PPLOps</span>
-        </Header>
         <Content
           style={{
             margin: 16,

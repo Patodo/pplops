@@ -28,6 +28,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::requirement_ping,
+            commands::list_requirements,
+            commands::list_requirement_owners,
+            commands::create_requirement,
+            commands::update_requirement,
+            commands::delete_requirement,
             commands::planning_ping,
             commands::member_ping,
             commands::member_count,
