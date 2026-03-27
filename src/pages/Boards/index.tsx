@@ -149,6 +149,7 @@ export default function BoardsPage() {
   const [loading, setLoading] = useState(false);
   const [expandedIds, setExpandedIds] = useState<number[]>([]);
   const [childrenByParent, setChildrenByParent] = useState<Record<number, WorkItem[]>>({});
+  const [selectedRowKey, setSelectedRowKey] = useState<string>();
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState<string>();
   const [owner, setOwner] = useState<string>();
@@ -232,6 +233,7 @@ export default function BoardsPage() {
   useEffect(() => {
     setExpandedIds([]);
     setChildrenByParent({});
+    setSelectedRowKey(undefined);
     void fetchRootItems();
   }, [fetchRootItems, activeKey]);
 
@@ -551,6 +553,7 @@ export default function BoardsPage() {
           scroll={{ x: tableScrollX }}
           components={{ header: { cell: ResizableHeaderCell } }}
           pagination={false}
+          rowClassName={(record) => (record.key === selectedRowKey ? "pplops-row-selected" : "")}
           onChange={(_pagination, _filters, sorter) => {
             if (!Array.isArray(sorter) && sorter.field) {
               const field = String(sorter.field);
@@ -565,6 +568,10 @@ export default function BoardsPage() {
           }}
           onRow={(record) => ({
             onClick: () => {
+              setSelectedRowKey(record.key);
+            },
+            onDoubleClick: () => {
+              setSelectedRowKey(record.key);
               void toggleExpanded(record);
             },
             style: { cursor: "pointer" },
