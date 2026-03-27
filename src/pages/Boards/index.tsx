@@ -323,7 +323,11 @@ export default function BoardsPage() {
       key: "expand",
       width: 48,
       render: (_: unknown, record) => {
-        const expandable = record.depth < tabConfig.maxDepth && Boolean(getNextKind(record.item.kind));
+        const nextKind = getNextKind(record.item.kind);
+        const expandable =
+          record.depth < tabConfig.maxDepth &&
+          Boolean(nextKind) &&
+          (record.item.hasChildren ?? true);
         if (!expandable) return null;
         const expanded = expandedIds.includes(record.item.id);
         return (

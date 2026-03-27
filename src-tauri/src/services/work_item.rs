@@ -60,6 +60,7 @@ pub struct WorkItemDto {
     pub item_id: String,
     pub kind: String,
     pub parent_id: Option<i32>,
+    pub has_children: bool,
     pub title: String,
     pub status: String,
     pub priority: String,
@@ -184,10 +185,35 @@ pub async fn list_work_items(
         },
     )
     .await?;
+
+    let mut ids_by_child_kind: std::collections::HashMap<String, Vec<i32>> = std::collections::HashMap::new();
+    for item in &items {
+        let child_kind = match item.kind.as_str() {
+            "project" => Some("requirement"),
+            "requirement" => Some("task"),
+            "task" => Some("subtask"),
+            _ => None,
+        };
+        if let Some(ck) = child_kind {
+            ids_by_child_kind
+                .entry(ck.to_owned())
+                .or_default()
+                .push(item.id);
+        }
+    }
+    let mut parents_with_children: std::collections::HashSet<i32> = std::collections::HashSet::new();
+    for (child_kind, parent_ids) in ids_by_child_kind {
+        let rows = repositories::work_item::list_parent_ids_with_children(db, child_kind.as_str(), parent_ids).await?;
+        for pid in rows {
+            parents_with_children.insert(pid);
+        }
+    }
+
     Ok(WorkItemListResult {
         items: items
             .into_iter()
             .map(|m| WorkItemDto {
+                has_children: parents_with_children.contains(&m.id),
                 id: m.id,
                 item_id: m.item_id,
                 kind: m.kind,
@@ -257,6 +283,7 @@ pub async fn create_work_item(
     )
     .await?;
     Ok(WorkItemDto {
+        has_children: false,
         id: model.id,
         item_id: model.item_id,
         kind: model.kind,
@@ -308,6 +335,7 @@ pub async fn update_work_item(
     )
     .await?;
     Ok(WorkItemDto {
+        has_children: false,
         id: model.id,
         item_id: model.item_id,
         kind: model.kind,
@@ -339,6 +367,7 @@ pub async fn get_work_item_detail(
         return Err(sea_orm::DbErr::Custom("work item not found".to_owned()));
     };
     Ok(WorkItemDto {
+        has_children: false,
         id: model.id,
         item_id: model.item_id.clone(),
         kind: model.kind.clone(),

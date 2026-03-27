@@ -1,6 +1,6 @@
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait, IntoActiveModel,
-    Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait,
+    IntoActiveModel, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 
 use crate::models::work_item::{ActiveModel, Column, Entity, Model};
@@ -191,4 +191,25 @@ pub async fn list_by_kind(
         .into_tuple::<(i32, String, String)>()
         .all(db)
         .await
+}
+
+pub async fn list_parent_ids_with_children(
+    db: &DatabaseConnection,
+    child_kind: &str,
+    parent_ids: Vec<i32>,
+) -> Result<Vec<i32>, sea_orm::DbErr> {
+    if parent_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let rows = Entity::find()
+        .filter(Column::Kind.eq(child_kind.to_owned()))
+        .filter(Column::ParentId.is_in(parent_ids))
+        .select_only()
+        .column(Column::ParentId)
+        .column_as(Expr::col(Column::Id).count(), "cnt")
+        .group_by(Column::ParentId)
+        .into_tuple::<(Option<i32>, i64)>()
+        .all(db)
+        .await?;
+    Ok(rows.into_iter().filter_map(|(pid, _)| pid).collect())
 }

@@ -5,6 +5,7 @@ export type WorkItem = {
   itemId: string;
   kind: WorkItemKind;
   parentId?: number;
+  hasChildren?: boolean;
   title: string;
   status: string;
   priority: string;
