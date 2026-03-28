@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, message } from "antd";
+import { Button, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
 import type { TableProps } from "antd";
-import {
-  ApartmentOutlined,
-  DeleteOutlined,
-  DownOutlined,
-  EditOutlined,
-  RightOutlined,
-  SettingOutlined,
-} from "@ant-design/icons";
+import { ApartmentOutlined, DeleteOutlined, EditOutlined, SettingOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   createWorkItem,
@@ -36,7 +29,13 @@ type BoardColumnKey =
   | "dueDate"
   | "updatedAt";
 
-type BoardRow = { key: string; item: WorkItem; depth: number };
+type BoardRow = {
+  key: string;
+  item: WorkItem;
+  depth: number;
+  ancestorsHasNext: boolean[];
+  isLastSibling: boolean;
+};
 
 const tabOptions: Array<{ key: BoardTabKey; label: string }> = [
   { key: "dashboard", label: "仪表盘" },
@@ -194,6 +193,15 @@ export default function BoardsPage() {
     return "todo";
   }, []);
 
+  const isRowExpandable = useCallback(
+    (row: BoardRow) => {
+      if (row.depth >= tabConfig.maxDepth) return false;
+      if (!getNextKind(row.item.kind)) return false;
+      return row.item.hasChildren ?? true;
+    },
+    [getNextKind, tabConfig.maxDepth],
+  );
+
   const createKind = useMemo<WorkItemKind | null>(() => {
     if (activeKey === "projects") return "project";
     if (activeKey === "requirements") return "requirement";
@@ -300,16 +308,24 @@ export default function BoardsPage() {
 
   const tableData = useMemo<BoardRow[]>(() => {
     const rows: BoardRow[] = [];
-    const appendRows = (current: WorkItem[], depth: number) => {
-      for (const item of current) {
-        const row = { key: `${item.kind}-${item.id}`, item, depth };
+    const appendRows = (current: WorkItem[], depth: number, ancestorsHasNext: boolean[]) => {
+      for (let index = 0; index < current.length; index += 1) {
+        const item = current[index];
+        const isLastSibling = index === current.length - 1;
+        const row: BoardRow = {
+          key: `${item.kind}-${item.id}`,
+          item,
+          depth,
+          ancestorsHasNext,
+          isLastSibling,
+        };
         rows.push(row);
         if (expandedIds.includes(item.id) && depth < tabConfig.maxDepth) {
-          appendRows(childrenByParent[item.id] ?? [], depth + 1);
+          appendRows(childrenByParent[item.id] ?? [], depth + 1, [...ancestorsHasNext, !isLastSibling]);
         }
       }
     };
-    appendRows(items, 0);
+    appendRows(items, 0, []);
     return rows.filter((row) => !owner || row.item.owner === owner);
   }, [childrenByParent, expandedIds, items, owner, tabConfig.maxDepth]);
 
@@ -320,37 +336,77 @@ export default function BoardsPage() {
 
   const baseColumns: NonNullable<TableProps<BoardRow>["columns"]> = [
     {
-      key: "expand",
-      width: 48,
-      render: (_: unknown, record) => {
-        const nextKind = getNextKind(record.item.kind);
-        const expandable =
-          record.depth < tabConfig.maxDepth &&
-          Boolean(nextKind) &&
-          (record.item.hasChildren ?? true);
-        if (!expandable) return null;
-        const expanded = expandedIds.includes(record.item.id);
-        return (
-          <Button
-            type="text"
-            size="small"
-            icon={expanded ? <DownOutlined /> : <RightOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void toggleExpanded(record);
-            }}
-          />
-        );
-      },
-    },
-    {
       key: "itemId",
       title: "ID",
-      render: (_: unknown, record) => (
-        <span style={{ paddingLeft: record.depth * 24, display: "inline-block" }}>
-          {record.item.itemId}
-        </span>
-      ),
+      render: (_: unknown, record) => {
+        const expandable = isRowExpandable(record);
+        return (
+        <div
+          className={`pplops-tree-cell pplops-tree-cell-${record.item.kind}`}
+          style={{ paddingLeft: record.depth * 18 }}
+        >
+          <svg
+            className="pplops-tree-svg"
+            width={(record.ancestorsHasNext.length + (record.depth > 0 ? 1 : 0)) * 14}
+            height={34}
+            viewBox={`0 0 ${(record.ancestorsHasNext.length + (record.depth > 0 ? 1 : 0)) * 14} 34`}
+            aria-hidden
+          >
+            {record.ancestorsHasNext.map((hasNext, idx) => {
+              if (!hasNext) return null;
+              // 最内层一项表示「直接父节点后还有同级」；在子行再画会与父行拐角重复，显得多出一根父级竖线
+              if (record.depth > 0 && idx === record.ancestorsHasNext.length - 1) return null;
+              const x = idx * 14 + 7;
+              return (
+                <line
+                  key={`v-${record.key}-${idx}`}
+                  x1={x}
+                  y1={-8}
+                  x2={x}
+                  y2={42}
+                  stroke="rgba(15, 23, 42, 0.22)"
+                  strokeWidth={1.6}
+                  strokeLinecap="square"
+                />
+              );
+            })}
+            {record.depth > 0 && (
+              <>
+                <line
+                  x1={record.ancestorsHasNext.length * 14 + 7}
+                  y1={-8}
+                  x2={record.ancestorsHasNext.length * 14 + 7}
+                  y2={record.isLastSibling ? 17 : 42}
+                  stroke="rgba(15, 23, 42, 0.24)"
+                  strokeWidth={1.6}
+                  strokeLinecap="square"
+                />
+                <line
+                  x1={record.ancestorsHasNext.length * 14 + 7}
+                  y1={17}
+                  x2={record.ancestorsHasNext.length * 14 + 15}
+                  y2={17}
+                  stroke="rgba(15, 23, 42, 0.24)"
+                  strokeWidth={1.6}
+                  strokeLinecap="square"
+                />
+              </>
+            )}
+          </svg>
+          <Tooltip title={expandable ? "双击行展开或收起下层" : undefined}>
+            {expandable ? (
+              <span
+                className={`pplops-tree-node-square pplops-tree-node-square--${record.item.kind}`}
+                aria-hidden
+              />
+            ) : (
+              <span className="pplops-tree-node-dot" aria-hidden />
+            )}
+          </Tooltip>
+          <span className="pplops-tree-id">{record.item.itemId}</span>
+        </div>
+        );
+      },
     },
     { key: "title", title: "标题", ellipsis: true, sorter: true, render: (_: unknown, record) => record.item.title },
     { key: "kind", title: "类型", render: (_: unknown, record) => <Tag>{kindLabelMap[record.item.kind]}</Tag> },
@@ -467,7 +523,6 @@ export default function BoardsPage() {
       .filter((col): col is NonNullable<typeof col> => Boolean(col));
     const resized = ordered.map((col) => {
       const key = String(col.key);
-      if (key === "expand") return col;
       const columnKey = key as BoardColumnKey;
       const width = columnWidths[columnKey];
       return {
@@ -488,8 +543,7 @@ export default function BoardsPage() {
     });
     const actionsColumn = map.get("actions");
     return [
-      baseColumns[0],
-      ...resized.filter((col) => String(col.key) !== "expand" && String(col.key) !== "actions"),
+      ...resized.filter((col) => String(col.key) !== "actions"),
       ...(actionsColumn ? [actionsColumn] : []),
     ];
   }, [baseColumns, columnWidths, visibleColumnKeys]);
@@ -548,16 +602,27 @@ export default function BoardsPage() {
             <Button onClick={() => void fetchRootItems()}>刷新</Button>
           </Space>
         </Space>
+        <Typography.Text type="secondary" style={{ display: "block" }}>
+          有下级为描边方块（浅填充 + 外环）；无下级为实心小圆点。单击选中，双击展开或收起。
+        </Typography.Text>
         <Table<BoardRow>
           rowKey="key"
           loading={loading}
           columns={tableColumns}
           dataSource={tableData}
+          className="pplops-boards-table"
+          size="middle"
           tableLayout="fixed"
           scroll={{ x: tableScrollX }}
           components={{ header: { cell: ResizableHeaderCell } }}
           pagination={false}
-          rowClassName={(record) => (record.key === selectedRowKey ? "pplops-row-selected" : "")}
+          rowClassName={(record, index) => {
+            const selected = record.key === selectedRowKey ? "pplops-row-selected" : "";
+            const depth = `pplops-depth-${record.depth}`;
+            const zebra = index % 2 === 0 ? "pplops-row-even" : "pplops-row-odd";
+            const expandable = isRowExpandable(record) ? "pplops-row-expandable" : "";
+            return [selected, depth, zebra, expandable].filter(Boolean).join(" ");
+          }}
           onChange={(_pagination, _filters, sorter) => {
             if (!Array.isArray(sorter) && sorter.field) {
               const field = String(sorter.field);
