@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Tooltip, Typography, message } from "antd";
+import { Button, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, Typography, message } from "antd";
 import type { TableProps } from "antd";
 import { ApartmentOutlined, DeleteOutlined, EditOutlined, SettingOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -11,8 +11,12 @@ import {
   listWorkItems,
 } from "@/api/work-item";
 import type { WorkItem, WorkItemKind, WorkItemParentOption } from "@/types/work-item";
+import { applyColumnSortMeta, type ColumnSortSpec } from "@/components/Table/applyColumnSortMeta";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
-import { ResizableHeaderCell } from "@/components/Table/ResizableHeaderCell";
+import { HierarchicalTreeCell } from "@/components/Table/HierarchicalTreeCell";
+import { mergeResizableColumns } from "@/components/Table/mergeResizableColumns";
+import { PplopsDataTable } from "@/components/Table/PplopsDataTable";
+import { usePersistedColumnLayout } from "@/components/Table/usePersistedColumnLayout";
 import { WorkItemEditModal } from "@/components/WorkItem/WorkItemEditModal";
 
 type BoardTabKey = "dashboard" | "projects" | "requirements" | "tasks";
@@ -100,41 +104,6 @@ const kindLabelMap: Record<WorkItemKind, string> = {
   subtask: "子任务",
 };
 
-function loadColumnsFromStorage(): CommonColumnConfig<BoardColumnKey>[] {
-  try {
-    const raw = localStorage.getItem(COLUMN_CONFIG_KEY);
-    if (!raw) return defaultColumns;
-    const parsed = JSON.parse(raw) as CommonColumnConfig<BoardColumnKey>[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultColumns;
-  } catch {
-    return defaultColumns;
-  }
-}
-
-function loadColumnWidthsFromStorage(): Record<BoardColumnKey, number> {
-  try {
-    const raw = localStorage.getItem(COLUMN_WIDTH_KEY);
-    if (!raw) return { ...defaultColumnWidths };
-    const parsed = JSON.parse(raw) as Partial<Record<BoardColumnKey, number>>;
-    return {
-      itemId: parsed.itemId ?? defaultColumnWidths.itemId,
-      title: parsed.title ?? defaultColumnWidths.title,
-      kind: parsed.kind ?? defaultColumnWidths.kind,
-      status: parsed.status ?? defaultColumnWidths.status,
-      priority: parsed.priority ?? defaultColumnWidths.priority,
-      owner: parsed.owner ?? defaultColumnWidths.owner,
-      effort: parsed.effort ?? defaultColumnWidths.effort,
-      planMonth: parsed.planMonth ?? defaultColumnWidths.planMonth,
-      plannedHours: parsed.plannedHours ?? defaultColumnWidths.plannedHours,
-      actualHours: parsed.actualHours ?? defaultColumnWidths.actualHours,
-      dueDate: parsed.dueDate ?? defaultColumnWidths.dueDate,
-      updatedAt: parsed.updatedAt ?? defaultColumnWidths.updatedAt,
-    };
-  } catch {
-    return { ...defaultColumnWidths };
-  }
-}
-
 export default function BoardsPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const navigate = useNavigate();
@@ -161,12 +130,18 @@ export default function BoardsPage() {
   const [parentOptions, setParentOptions] = useState<WorkItemParentOption[]>([]);
   const [createContext, setCreateContext] = useState<{ kind: WorkItemKind; parentId?: number }>();
   const [createForm] = Form.useForm<{ title: string; owner: string; parentId?: number }>();
-  const [columnConfigs, setColumnConfigs] = useState<CommonColumnConfig<BoardColumnKey>[]>(
-    loadColumnsFromStorage(),
-  );
-  const [columnWidths, setColumnWidths] = useState<Record<BoardColumnKey, number>>(
-    loadColumnWidthsFromStorage(),
-  );
+  const {
+    columnConfigs,
+    setColumnConfigs,
+    columnWidths,
+    setColumnWidths,
+    resetColumns,
+  } = usePersistedColumnLayout<BoardColumnKey>({
+    configStorageKey: COLUMN_CONFIG_KEY,
+    widthStorageKey: COLUMN_WIDTH_KEY,
+    defaultColumns,
+    defaultWidths: defaultColumnWidths,
+  });
   const [editWorkItemId, setEditWorkItemId] = useState<number | null>(null);
 
   const tabConfig = useMemo(() => {
@@ -246,10 +221,6 @@ export default function BoardsPage() {
     setSelectedRowKey(undefined);
     void fetchRootItems();
   }, [fetchRootItems, activeKey]);
-
-  useEffect(() => {
-    localStorage.setItem(COLUMN_CONFIG_KEY, JSON.stringify(columnConfigs));
-  }, [columnConfigs]);
 
   useEffect(() => {
     const raw = searchParams.get("edit");
@@ -354,74 +325,19 @@ export default function BoardsPage() {
       render: (_: unknown, record) => {
         const expandable = isRowExpandable(record);
         return (
-        <div
-          className={`pplops-tree-cell pplops-tree-cell-${record.item.kind}`}
-          style={{ paddingLeft: record.depth * 18 }}
-        >
-          <svg
-            className="pplops-tree-svg"
-            width={(record.ancestorsHasNext.length + (record.depth > 0 ? 1 : 0)) * 14}
-            height={34}
-            viewBox={`0 0 ${(record.ancestorsHasNext.length + (record.depth > 0 ? 1 : 0)) * 14} 34`}
-            aria-hidden
-          >
-            {record.ancestorsHasNext.map((hasNext, idx) => {
-              if (!hasNext) return null;
-              // 最内层一项表示「直接父节点后还有同级」；在子行再画会与父行拐角重复，显得多出一根父级竖线
-              if (record.depth > 0 && idx === record.ancestorsHasNext.length - 1) return null;
-              const x = idx * 14 + 7;
-              return (
-                <line
-                  key={`v-${record.key}-${idx}`}
-                  x1={x}
-                  y1={-8}
-                  x2={x}
-                  y2={42}
-                  stroke="rgba(15, 23, 42, 0.22)"
-                  strokeWidth={1.6}
-                  strokeLinecap="square"
-                />
-              );
-            })}
-            {record.depth > 0 && (
-              <>
-                <line
-                  x1={record.ancestorsHasNext.length * 14 + 7}
-                  y1={-8}
-                  x2={record.ancestorsHasNext.length * 14 + 7}
-                  y2={record.isLastSibling ? 17 : 42}
-                  stroke="rgba(15, 23, 42, 0.24)"
-                  strokeWidth={1.6}
-                  strokeLinecap="square"
-                />
-                <line
-                  x1={record.ancestorsHasNext.length * 14 + 7}
-                  y1={17}
-                  x2={record.ancestorsHasNext.length * 14 + 15}
-                  y2={17}
-                  stroke="rgba(15, 23, 42, 0.24)"
-                  strokeWidth={1.6}
-                  strokeLinecap="square"
-                />
-              </>
-            )}
-          </svg>
-          <Tooltip title={expandable ? "双击行展开或收起下层" : undefined}>
-            {expandable ? (
-              <span
-                className={`pplops-tree-node-square pplops-tree-node-square--${record.item.kind}`}
-                aria-hidden
-              />
-            ) : (
-              <span className="pplops-tree-node-dot" aria-hidden />
-            )}
-          </Tooltip>
-          <span className="pplops-tree-id">{record.item.itemId}</span>
-        </div>
+          <HierarchicalTreeCell
+            rowKey={record.key}
+            depth={record.depth}
+            ancestorsHasNext={record.ancestorsHasNext}
+            isLastSibling={record.isLastSibling}
+            expandable={expandable}
+            nodeVariant={record.item.kind}
+            label={record.item.itemId}
+          />
         );
       },
     },
-    { key: "title", title: "标题", ellipsis: true, sorter: true, render: (_: unknown, record) => record.item.title },
+    { key: "title", title: "标题", ellipsis: true, render: (_: unknown, record) => record.item.title },
     { key: "kind", title: "类型", render: (_: unknown, record) => <Tag>{kindLabelMap[record.item.kind]}</Tag> },
     { key: "status", title: "状态", render: (_: unknown, record) => <Tag>{record.item.status}</Tag> },
     { key: "priority", title: "优先级", render: (_: unknown, record) => <Tag color="orange">{record.item.priority}</Tag> },
@@ -434,7 +350,6 @@ export default function BoardsPage() {
     {
       key: "updatedAt",
       title: "更新时间",
-      sorter: true,
       render: (_: unknown, record) => new Date(record.item.updatedAt * 1000).toLocaleString(),
     },
     {
@@ -512,6 +427,14 @@ export default function BoardsPage() {
     },
   ];
 
+  const boardSortSpec = useMemo<ColumnSortSpec<BoardColumnKey, BoardRow>>(
+    () => ({
+      title: { mode: "remote" },
+      updatedAt: { mode: "remote" },
+    }),
+    [],
+  );
+
   const visibleColumnKeys = useMemo(
     () =>
       [...columnConfigs]
@@ -521,37 +444,30 @@ export default function BoardsPage() {
     [columnConfigs],
   );
 
-  const tableColumns = useMemo(() => {
-    const map = new Map(baseColumns.map((col) => [String(col.key), col]));
-    const ordered = visibleColumnKeys
-      .map((key) => map.get(key))
-      .filter((col): col is NonNullable<typeof col> => Boolean(col));
-    const resized = ordered.map((col) => {
-      const key = String(col.key);
-      const columnKey = key as BoardColumnKey;
-      const width = columnWidths[columnKey];
-      return {
-        ...col,
-        width,
-        onHeaderCell: () => ({
-          width,
-          onResizeStop: (nextWidth: number) => {
-            const safeWidth = Math.max(80, Math.floor(nextWidth));
-            setColumnWidths((prev) => {
-              const next = { ...prev, [columnKey]: safeWidth };
-              localStorage.setItem(COLUMN_WIDTH_KEY, JSON.stringify(next));
-              return next;
-            });
-          },
-        }),
-      };
-    });
-    const actionsColumn = map.get("actions");
-    return [
-      ...resized.filter((col) => String(col.key) !== "actions"),
-      ...(actionsColumn ? [actionsColumn] : []),
-    ];
-  }, [baseColumns, columnWidths, visibleColumnKeys]);
+  const columnsWithSort = useMemo(
+    () =>
+      applyColumnSortMeta<BoardRow, BoardColumnKey>({
+        columns: baseColumns,
+        sortSpec: boardSortSpec,
+        remoteSort: {
+          columnKey: sortField,
+          order: sortOrder,
+        },
+      }),
+    [baseColumns, boardSortSpec, sortField, sortOrder],
+  );
+
+  const tableColumns = useMemo(
+    () =>
+      mergeResizableColumns<BoardRow, BoardColumnKey>({
+        baseColumns: columnsWithSort,
+        visibleKeys: visibleColumnKeys,
+        columnWidths,
+        setColumnWidths,
+        pinnedRightKeys: ["actions"],
+      }),
+    [columnsWithSort, visibleColumnKeys, columnWidths, setColumnWidths],
+  );
 
   const tableScrollX = useMemo(() => {
     const visibleWidth = visibleColumnKeys.reduce((sum, key) => sum + columnWidths[key], 0);
@@ -610,17 +526,13 @@ export default function BoardsPage() {
         <Typography.Text type="secondary" style={{ display: "block" }}>
           有下级为描边方块（浅填充 + 外环）；无下级为实心小圆点。单击选中，双击展开或收起。
         </Typography.Text>
-        <Table<BoardRow>
+        <PplopsDataTable<BoardRow, BoardColumnKey>
           rowKey="key"
           loading={loading}
           columns={tableColumns}
           dataSource={tableData}
-          className="pplops-boards-table"
-          size="middle"
-          tableLayout="fixed"
-          scroll={{ x: tableScrollX }}
-          components={{ header: { cell: ResizableHeaderCell } }}
           pagination={false}
+          scrollX={tableScrollX}
           rowClassName={(record, index) => {
             const selected = record.key === selectedRowKey ? "pplops-row-selected" : "";
             const depth = `pplops-depth-${record.depth}`;
@@ -628,28 +540,16 @@ export default function BoardsPage() {
             const expandable = isRowExpandable(record) ? "pplops-row-expandable" : "";
             return [selected, depth, zebra, expandable].filter(Boolean).join(" ");
           }}
-          onChange={(_pagination, _filters, sorter) => {
-            if (!Array.isArray(sorter) && sorter.field) {
-              const field = String(sorter.field);
-              if (field === "updatedAt" || field === "title") {
-                setSortField(field);
-                setSortOrder(sorter.order ?? undefined);
-              }
-            } else {
-              setSortField(undefined);
-              setSortOrder(undefined);
-            }
+          rowExpandInteraction="preset"
+          onSelectedRowKeyChange={setSelectedRowKey}
+          onToggleExpand={toggleExpanded}
+          sortSpec={boardSortSpec}
+          onRemoteSort={({ columnKey, order }) => {
+            setSortField(
+              columnKey === "title" || columnKey === "updatedAt" ? columnKey : undefined,
+            );
+            setSortOrder(order);
           }}
-          onRow={(record) => ({
-            onClick: () => {
-              setSelectedRowKey(record.key);
-            },
-            onDoubleClick: () => {
-              setSelectedRowKey(record.key);
-              void toggleExpanded(record);
-            },
-            style: { cursor: "pointer" },
-          })}
         />
       </Space>
       <ColumnSettingsModal<BoardColumnKey>
@@ -659,7 +559,7 @@ export default function BoardsPage() {
         titleMap={columnTitleMap}
         columnConfigs={columnConfigs}
         setColumnConfigs={setColumnConfigs}
-        onResetDefault={() => setColumnConfigs(defaultColumns.map((item) => ({ ...item })))}
+        onResetDefault={resetColumns}
       />
       <Modal
         title={createLabel}
