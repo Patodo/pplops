@@ -4,7 +4,6 @@ import {
   BarChart3,
   GanttChartSquare,
   Handshake,
-  ListChecks,
   Settings2,
   SquareKanban,
   UserRound,

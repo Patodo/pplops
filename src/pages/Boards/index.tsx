@@ -13,6 +13,7 @@ import {
 import type { WorkItem, WorkItemKind, WorkItemParentOption } from "@/types/work-item";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
 import { ResizableHeaderCell } from "@/components/Table/ResizableHeaderCell";
+import { WorkItemEditModal } from "@/components/WorkItem/WorkItemEditModal";
 
 type BoardTabKey = "dashboard" | "projects" | "requirements" | "tasks";
 type BoardColumnKey =
@@ -137,7 +138,7 @@ function loadColumnWidthsFromStorage(): Record<BoardColumnKey, number> {
 export default function BoardsPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tab = searchParams.get("tab");
   const activeKey: BoardTabKey = useMemo(() => {
     if (tab === "projects" || tab === "requirements" || tab === "tasks") return tab;
@@ -166,6 +167,7 @@ export default function BoardsPage() {
   const [columnWidths, setColumnWidths] = useState<Record<BoardColumnKey, number>>(
     loadColumnWidthsFromStorage(),
   );
+  const [editWorkItemId, setEditWorkItemId] = useState<number | null>(null);
 
   const tabConfig = useMemo(() => {
     switch (activeKey) {
@@ -248,6 +250,17 @@ export default function BoardsPage() {
   useEffect(() => {
     localStorage.setItem(COLUMN_CONFIG_KEY, JSON.stringify(columnConfigs));
   }, [columnConfigs]);
+
+  useEffect(() => {
+    const raw = searchParams.get("edit");
+    if (!raw || !/^\d+$/.test(raw)) return;
+    const id = Number(raw);
+    if (!Number.isInteger(id) || id <= 0) return;
+    setEditWorkItemId(id);
+    const next = new URLSearchParams(searchParams);
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -459,15 +472,7 @@ export default function BoardsPage() {
               icon={<EditOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                if (record.item.kind === "requirement") {
-                  navigate(`/requirements/${record.item.id}`);
-                  return;
-                }
-                if (record.item.kind === "task") {
-                  navigate(`/tasks/${record.item.id}`);
-                  return;
-                }
-                messageApi.info("该类型暂未提供独立详情页");
+                setEditWorkItemId(record.item.id);
               }}
             />
           </Tooltip>
@@ -728,6 +733,12 @@ export default function BoardsPage() {
           </Form.Item>
         </Form>
       </Modal>
+      <WorkItemEditModal
+        open={editWorkItemId !== null}
+        workItemId={editWorkItemId}
+        onClose={() => setEditWorkItemId(null)}
+        onSaved={() => void fetchRootItems()}
+      />
     </div>
   );
 }
