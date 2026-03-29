@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_NEW_SUBTASK } from "@/test/domainSpec";
-import type { WorkItem } from "@/types/work-item";
+import type { WorkItem } from "@/shared/work-item";
 
-vi.mock("@/api/work-item", () => ({
+vi.mock("@/shared/work-item", () => ({
   listWorkItems: vi.fn(),
   createWorkItem: vi.fn(),
   deleteWorkItem: vi.fn(),
@@ -25,7 +25,7 @@ import {
   listParentTasks,
   listWorkItems,
   updateWorkItem,
-} from "@/api/work-item";
+} from "@/shared/work-item";
 import {
   createSubtask,
   createTask,
