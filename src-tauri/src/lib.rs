@@ -25,45 +25,8 @@ pub fn run() {
             app.manage(state::AppState { db });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            commands::get_app_info,
-            commands::requirement_ping,
-            commands::list_requirements,
-            commands::list_requirement_owners,
-            commands::create_requirement,
-            commands::update_requirement,
-            commands::delete_requirement,
-            commands::get_requirement_detail,
-            commands::planning_ping,
-            commands::member_ping,
-            commands::member_count,
-            commands::list_members,
-            commands::list_member_groups,
-            commands::create_member,
-            commands::update_member,
-            commands::delete_member,
-            commands::get_member_detail,
-            commands::workload_ping,
-            commands::task_ping,
-            commands::list_tasks,
-            commands::list_task_requirements,
-            commands::create_task,
-            commands::update_task,
-            commands::delete_task,
-            commands::get_task_detail,
-            commands::list_work_items,
-            commands::get_work_item_detail,
-            commands::create_work_item,
-            commands::update_work_item,
-            commands::delete_work_item,
-            commands::list_parent_projects,
-            commands::list_parent_requirements,
-            commands::list_parent_tasks,
-            commands::get_work_item_orchestration,
-            commands::save_work_item_orchestration,
-            commands::meeting_ping,
-            commands::report_ping,
-        ])
+        // 命令表见 `commands/invoke_list.rs`（按名字排序；Tauri 2 不支持链式 merge invoke_handler）
+        .invoke_handler(pplops_invoke_handlers!())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -1,4 +1,4 @@
-import type { WorkItemKind } from "@/types/work-item";
+import type { WorkItemKind } from "@/shared/work-item";
 import {
   DEFAULT_WORK_ITEM_PRIORITY,
   PRIORITY_VALUE_MAX,

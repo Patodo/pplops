@@ -3,16 +3,18 @@ import { Button, Form, Input, Modal, Select, Space, Tabs, Tag, Tooltip, Typograp
 import type { TableProps } from "antd";
 import { ApartmentOutlined, DeleteOutlined, EditOutlined, SettingOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { WorkItemOrchestrationModal } from "@/features/work-item-orchestration";
+import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriority";
 import {
   createWorkItem,
   deleteWorkItem,
   listParentProjects,
   listParentRequirements,
   listWorkItems,
-} from "@/api/work-item";
-import { WorkItemOrchestrationModal } from "@/features/work-item-orchestration";
-import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriority";
-import type { WorkItem, WorkItemKind, WorkItemParentOption } from "@/types/work-item";
+  type WorkItem,
+  type WorkItemKind,
+  type WorkItemParentOption,
+} from "@/shared/work-item";
 import { applyColumnSortMeta, type ColumnSortSpec } from "@/components/Table/applyColumnSortMeta";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
 import { HierarchicalTreeCell } from "@/components/Table/HierarchicalTreeCell";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { WorkItemKind } from "@/types/work-item";
+import type { WorkItemKind } from "@/shared/work-item";
 import {
   ALL_WORK_ITEM_KINDS,
   DEFAULT_WORK_ITEM_PRIORITY,

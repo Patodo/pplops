@@ -7,8 +7,8 @@ import {
   listParentTasks,
   listWorkItems,
   updateWorkItem,
-} from "@/api/work-item";
-import type { WorkItem } from "@/types/work-item";
+  type WorkItem,
+} from "@/shared/work-item";
 import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriority";
 import type {
   CreateTaskPayload,

@@ -6,7 +6,7 @@
  * - 单测从本文件取期望，不从实现抄断言；实现偏离规格时应失败。
  */
 
-import type { WorkItemKind } from "@/types/work-item";
+import type { WorkItemKind } from "@/shared/work-item";
 import {
   DEFAULT_WORK_ITEM_PRIORITY,
   PRIORITY_VALUE_MAX,
