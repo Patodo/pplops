@@ -1,6 +1,6 @@
 use sea_orm::{
-    sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, DatabaseConnection, EntityTrait,
-    IntoActiveModel, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    sea_query::Expr, ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection,
+    EntityTrait, IntoActiveModel, Order, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 
 use crate::models::work_item::{ActiveModel, Column, Entity, Model};
@@ -12,7 +12,7 @@ pub struct WorkItemListQuery {
     pub parent_id: Option<i32>,
     pub keyword: Option<String>,
     pub status: Option<String>,
-    pub priority: Option<String>,
+    pub priority: Option<i32>,
     pub sort_field: Option<String>,
     pub sort_order: Option<String>,
 }
@@ -23,7 +23,7 @@ pub struct WorkItemCreateInput {
     pub parent_id: Option<i32>,
     pub title: String,
     pub status: String,
-    pub priority: String,
+    pub priority: i32,
     pub owner: String,
     pub content: String,
     pub effort: Option<f64>,
@@ -40,7 +40,7 @@ pub struct WorkItemUpdateInput {
     pub parent_id: Option<i32>,
     pub title: String,
     pub status: String,
-    pub priority: String,
+    pub priority: i32,
     pub owner: String,
     pub content: Option<String>,
     pub effort: Option<f64>,
@@ -75,8 +75,8 @@ pub async fn list_work_items(
     if let Some(status) = q.status.filter(|v| !v.trim().is_empty()) {
         filter = filter.add(Column::Status.eq(status.trim().to_owned()));
     }
-    if let Some(priority) = q.priority.filter(|v| !v.trim().is_empty()) {
-        filter = filter.add(Column::Priority.eq(priority.trim().to_owned()));
+    if let Some(priority) = q.priority {
+        filter = filter.add(Column::Priority.eq(priority));
     }
     query = query.filter(filter);
 
@@ -87,7 +87,16 @@ pub async fn list_work_items(
     match q.sort_field.as_deref() {
         Some("updatedAt") => query = query.order_by(Column::UpdatedAt, order),
         Some("title") => query = query.order_by(Column::Title, order),
-        _ => query = query.order_by(Column::UpdatedAt, Order::Desc),
+        Some("priority") => query = query.order_by(Column::Priority, order),
+        _ => {
+            if q.parent_id.is_some() {
+                query = query
+                    .order_by(Column::Priority, Order::Asc)
+                    .order_by(Column::UpdatedAt, Order::Desc);
+            } else {
+                query = query.order_by(Column::UpdatedAt, Order::Desc);
+            }
+        }
     }
 
     let page = if q.page == 0 { 1 } else { q.page };
@@ -165,6 +174,23 @@ pub async fn get_work_item_by_id(
     Entity::find_by_id(id).one(db).await
 }
 
+pub async fn set_priority_and_touch<C: ConnectionTrait>(
+    db: &C,
+    id: i32,
+    priority: i32,
+    updated_at: i64,
+) -> Result<(), sea_orm::DbErr> {
+    let model = Entity::find_by_id(id).one(db).await?;
+    let Some(existing) = model else {
+        return Err(sea_orm::DbErr::Custom("work item not found".to_owned()));
+    };
+    let mut active = existing.into_active_model();
+    active.priority = Set(priority);
+    active.updated_at = Set(updated_at);
+    active.update(db).await?;
+    Ok(())
+}
+
 pub async fn get_parent_kind(
     db: &DatabaseConnection,
     parent_id: i32,
@@ -189,6 +215,20 @@ pub async fn list_by_kind(
         .column(Column::Title)
         .order_by(Column::UpdatedAt, Order::Desc)
         .into_tuple::<(i32, String, String)>()
+        .all(db)
+        .await
+}
+
+pub async fn list_children_of_parent(
+    db: &DatabaseConnection,
+    parent_id: i32,
+    kind: &str,
+) -> Result<Vec<Model>, sea_orm::DbErr> {
+    Entity::find()
+        .filter(Column::ParentId.eq(parent_id))
+        .filter(Column::Kind.eq(kind.to_owned()))
+        .order_by(Column::Priority, Order::Asc)
+        .order_by(Column::UpdatedAt, Order::Desc)
         .all(db)
         .await
 }

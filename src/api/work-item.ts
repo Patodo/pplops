@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   CreateWorkItemPayload,
+  SaveWorkItemOrchestrationPayload,
   UpdateWorkItemPayload,
   WorkItem,
   WorkItemListQuery,
   WorkItemListResult,
+  WorkItemOrchestration,
   WorkItemParentOption,
 } from "@/types/work-item";
 
@@ -38,4 +40,14 @@ export async function listParentRequirements(): Promise<WorkItemParentOption[]> 
 
 export async function listParentTasks(): Promise<WorkItemParentOption[]> {
   return invoke<WorkItemParentOption[]>("list_parent_tasks");
+}
+
+export async function getWorkItemOrchestration(parentId: number): Promise<WorkItemOrchestration> {
+  return invoke<WorkItemOrchestration>("get_work_item_orchestration", { parentId });
+}
+
+export async function saveWorkItemOrchestration(
+  payload: SaveWorkItemOrchestrationPayload,
+): Promise<void> {
+  return invoke<void>("save_work_item_orchestration", { payload });
 }

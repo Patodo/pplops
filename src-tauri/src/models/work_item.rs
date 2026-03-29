@@ -10,7 +10,7 @@ pub struct Model {
     pub parent_id: Option<i32>,
     pub title: String,
     pub status: String,
-    pub priority: String,
+    pub priority: i32,
     pub owner: String,
     pub content: String,
     pub effort: Option<f64>,

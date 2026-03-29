@@ -7,6 +7,13 @@
  */
 
 import type { WorkItemKind } from "@/types/work-item";
+import {
+  DEFAULT_WORK_ITEM_PRIORITY,
+  PRIORITY_VALUE_MAX,
+  PRIORITY_VALUE_MIN,
+} from "@/lib/workItemPriorityLayout";
+
+export { DEFAULT_WORK_ITEM_PRIORITY, PRIORITY_VALUE_MAX, PRIORITY_VALUE_MIN };
 
 /** 全部工作项类型（层级：项目 → 需求 → 任务 → 子任务） */
 export const ALL_WORK_ITEM_KINDS: WorkItemKind[] = ["project", "requirement", "task", "subtask"];
@@ -29,13 +36,7 @@ export const TASK_AND_SUBTASK_STATUS_OPTIONS = [
   { label: "已取消", value: "cancelled" },
 ] as const;
 
-/** 优先级选项（表单与列表筛选共用一套取值） */
-export const PRIORITY_OPTIONS = [
-  { label: "低", value: "low" },
-  { label: "中", value: "medium" },
-  { label: "高", value: "high" },
-  { label: "紧急", value: "critical" },
-] as const;
+/** 工作项 priority 数值域（0–65535，越小越优先），与 SQLite / Tauri 契约一致（见上方 re-export） */
 
 /** 类型在界面上的展示名 */
 export const KIND_DISPLAY_TITLE: Record<WorkItemKind, string> = {
@@ -56,7 +57,7 @@ export function expectedFormatDateUtc(d: Date): string {
 /** 新建子任务时未显式指定则采用的业务默认 */
 export const DEFAULT_NEW_SUBTASK = {
   status: "todo",
-  priority: "medium",
+  priority: DEFAULT_WORK_ITEM_PRIORITY,
   plannedHours: 0,
   actualHours: 0,
 } as const;
@@ -71,6 +72,8 @@ export const TAURI_WORK_ITEM_COMMANDS = {
   parentProjects: "list_parent_projects",
   parentRequirements: "list_parent_requirements",
   parentTasks: "list_parent_tasks",
+  orchestrationGet: "get_work_item_orchestration",
+  orchestrationSave: "save_work_item_orchestration",
 } as const;
 
 /** 成员模块 Tauri 命令名 */

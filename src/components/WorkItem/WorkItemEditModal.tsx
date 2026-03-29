@@ -24,14 +24,18 @@ import {
   MarkdownDetailPreview,
   MarkdownEditorArea,
 } from "@/components/DetailEditModal";
-import { kindTitleMap, priorityOptions, statusOptionsForKind } from "@/config/work-item-form";
+import {
+  kindTitleMap,
+  statusOptionsForKind,
+  workItemPriorityInputProps,
+} from "@/config/work-item-form";
 
 const { Text } = Typography;
 
 type FormValues = {
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   parentId?: number;
   effort?: number;
@@ -246,7 +250,7 @@ export function WorkItemEditModal({
           )}
           {item.kind === "task" && (
             <Text type="secondary">
-              子任务请在「看板」中展开该任务后，使用「分解下层」或表格操作进行管理。
+              子任务请在「看板」中展开该任务后，点击「分解下层」打开编排模态，或通过表格与编辑进行管理。
             </Text>
           )}
           {editing ? (
@@ -315,8 +319,12 @@ export function WorkItemEditModal({
                     </Form.Item>
                   </Col>
                   <Col span={6}>
-                    <Form.Item label="优先级" name="priority" rules={[{ required: true }]}>
-                      <Select options={priorityOptions} />
+                    <Form.Item
+                      label="优先级 (0–65535，越小越优先)"
+                      name="priority"
+                      rules={[{ required: true, message: "请输入优先级" }]}
+                    >
+                      <InputNumber {...workItemPriorityInputProps} style={{ width: "100%" }} />
                     </Form.Item>
                   </Col>
                   <Col span={item.kind === "project" ? 24 : 12}>

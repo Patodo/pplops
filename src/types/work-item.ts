@@ -8,7 +8,7 @@ export type WorkItem = {
   hasChildren?: boolean;
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   content: string;
   effort?: number;
@@ -26,8 +26,8 @@ export type WorkItemListQuery = {
   parentId?: number;
   keyword?: string;
   status?: string;
-  priority?: string;
-  sortField?: "updatedAt" | "title";
+  priority?: number;
+  sortField?: "updatedAt" | "title" | "priority";
   sortOrder?: "ascend" | "descend";
 };
 
@@ -43,7 +43,7 @@ export type CreateWorkItemPayload = {
   parentId?: number;
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   content?: string;
   effort?: number;
@@ -61,4 +61,20 @@ export type WorkItemParentOption = {
   id: number;
   itemId: string;
   title: string;
+};
+
+export type WorkItemDependencyEdge = {
+  predecessorId: number;
+  successorId: number;
+};
+
+export type WorkItemOrchestration = {
+  items: WorkItem[];
+  dependencies: WorkItemDependencyEdge[];
+};
+
+export type SaveWorkItemOrchestrationPayload = {
+  parentId: number;
+  items: Array<{ id: number; priority: number }>;
+  dependencies: WorkItemDependencyEdge[];
 };

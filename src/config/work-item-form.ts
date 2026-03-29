@@ -1,11 +1,16 @@
 import type { WorkItemKind } from "@/types/work-item";
+import {
+  DEFAULT_WORK_ITEM_PRIORITY,
+  PRIORITY_VALUE_MAX,
+  PRIORITY_VALUE_MIN,
+} from "@/lib/workItemPriorityLayout";
 
-export const priorityOptions = [
-  { label: "低", value: "low" },
-  { label: "中", value: "medium" },
-  { label: "高", value: "high" },
-  { label: "紧急", value: "critical" },
-];
+export const workItemPriorityInputProps = {
+  min: PRIORITY_VALUE_MIN,
+  max: PRIORITY_VALUE_MAX,
+} as const;
+
+export const defaultWorkItemPriority = DEFAULT_WORK_ITEM_PRIORITY;
 
 const projectAndRequirementStatus = [
   { label: "准备中", value: "preparing" },

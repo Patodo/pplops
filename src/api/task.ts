@@ -9,6 +9,7 @@ import {
   updateWorkItem,
 } from "@/api/work-item";
 import type { WorkItem } from "@/types/work-item";
+import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriorityLayout";
 import type {
   CreateTaskPayload,
   TaskDetail,
@@ -103,7 +104,7 @@ export async function createSubtask(payload: {
   title: string;
   owner: string;
   status?: string;
-  priority?: string;
+  priority?: number;
   plannedHours?: number;
 }): Promise<TaskItem> {
   const item = await createWorkItem({
@@ -112,7 +113,7 @@ export async function createSubtask(payload: {
     title: payload.title,
     owner: payload.owner,
     status: payload.status ?? "todo",
-    priority: payload.priority ?? "medium",
+    priority: payload.priority ?? DEFAULT_WORK_ITEM_PRIORITY,
     plannedHours: payload.plannedHours ?? 0,
     actualHours: 0,
   });

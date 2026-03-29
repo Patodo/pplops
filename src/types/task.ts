@@ -4,7 +4,7 @@ export type TaskItem = {
   requirementId: number;
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   plannedHours: number;
   actualHours: number;
@@ -28,7 +28,7 @@ export type TaskListQuery = {
   pageSize: number;
   keyword?: string;
   status?: string;
-  priority?: string;
+  priority?: number;
   requirementId?: number;
   sortField?: "plannedHours" | "actualHours" | "dueDate" | "updatedAt";
   sortOrder?: "ascend" | "descend";
@@ -45,7 +45,7 @@ export type CreateTaskPayload = {
   requirementId: number;
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   plannedHours: number;
   actualHours: number;

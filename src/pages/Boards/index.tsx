@@ -10,6 +10,7 @@ import {
   listParentRequirements,
   listWorkItems,
 } from "@/api/work-item";
+import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriorityLayout";
 import type { WorkItem, WorkItemKind, WorkItemParentOption } from "@/types/work-item";
 import { applyColumnSortMeta, type ColumnSortSpec } from "@/components/Table/applyColumnSortMeta";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
@@ -18,6 +19,7 @@ import { mergeResizableColumns } from "@/components/Table/mergeResizableColumns"
 import { PplopsDataTable } from "@/components/Table/PplopsDataTable";
 import { usePersistedColumnLayout } from "@/components/Table/usePersistedColumnLayout";
 import { WorkItemEditModal } from "@/components/WorkItem/WorkItemEditModal";
+import { WorkItemOrchestrationModal } from "@/components/WorkItem/WorkItemOrchestrationModal";
 
 type BoardTabKey = "dashboard" | "projects" | "requirements" | "tasks";
 type BoardColumnKey =
@@ -143,6 +145,8 @@ export default function BoardsPage() {
     defaultWidths: defaultColumnWidths,
   });
   const [editWorkItemId, setEditWorkItemId] = useState<number | null>(null);
+  const [orchOpen, setOrchOpen] = useState(false);
+  const [orchContext, setOrchContext] = useState<{ id: number; title: string } | null>(null);
 
   const tabConfig = useMemo(() => {
     switch (activeKey) {
@@ -278,8 +282,6 @@ export default function BoardsPage() {
           pageSize: 500,
           kind: nextKind,
           parentId: key,
-          sortField: "updatedAt",
-          sortOrder: "descend",
         });
         setChildrenByParent((prev) => ({ ...prev, [key]: result.items }));
       } catch (error) {
@@ -361,7 +363,7 @@ export default function BoardsPage() {
         const nextKind = getNextKind(record.item.kind);
         return (
           <Space size={4}>
-            <Tooltip title="分解下层">
+            <Tooltip title="分解下层（编排）">
               <Button
                 type="text"
                 size="small"
@@ -370,13 +372,8 @@ export default function BoardsPage() {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!nextKind) return;
-                  setCreateContext({ kind: nextKind, parentId: record.item.id });
-                  createForm.setFieldsValue({
-                    parentId: record.item.id,
-                    title: `新建${kindLabelMap[nextKind]}`,
-                    owner: record.item.owner || "未分配",
-                  });
-                  setCreateOpen(true);
+                  setOrchContext({ id: record.item.id, title: record.item.title });
+                  setOrchOpen(true);
                 }}
               />
             </Tooltip>
@@ -581,7 +578,7 @@ export default function BoardsPage() {
                 parentId: values.parentId,
                 title: values.title,
                 status: getDefaultStatus(kind),
-                priority: "medium",
+                priority: DEFAULT_WORK_ITEM_PRIORITY,
                 owner: values.owner,
                 effort: kind === "requirement" ? 0 : undefined,
                 planMonth: kind === "requirement" ? "" : undefined,
@@ -638,6 +635,26 @@ export default function BoardsPage() {
         workItemId={editWorkItemId}
         onClose={() => setEditWorkItemId(null)}
         onSaved={() => void fetchRootItems()}
+      />
+      <WorkItemOrchestrationModal
+        open={orchOpen}
+        parentId={orchContext?.id ?? null}
+        parentTitle={orchContext?.title ?? ""}
+        onClose={() => {
+          setOrchOpen(false);
+          setOrchContext(null);
+        }}
+        onSaved={() => {
+          void fetchRootItems();
+          const pid = orchContext?.id;
+          if (pid != null) {
+            setChildrenByParent((prev) => {
+              const next = { ...prev };
+              delete next[pid];
+              return next;
+            });
+          }
+        }}
       />
     </div>
   );

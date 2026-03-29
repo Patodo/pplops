@@ -8,15 +8,13 @@ export type RequirementStatus =
   | "completed"
   | "cancelled";
 
-export type RequirementPriority = "low" | "medium" | "high" | "critical";
-
 export type RequirementItem = {
   id: number;
   reqId: string;
   projectId?: number;
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   effort: number;
   planMonth: string;
@@ -50,7 +48,7 @@ export type CreateRequirementPayload = {
   projectId: number;
   title: string;
   status: string;
-  priority: string;
+  priority: number;
   owner: string;
   effort: number;
   planMonth: string;

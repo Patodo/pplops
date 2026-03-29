@@ -59,6 +59,8 @@ pub fn run() {
             commands::list_parent_projects,
             commands::list_parent_requirements,
             commands::list_parent_tasks,
+            commands::get_work_item_orchestration,
+            commands::save_work_item_orchestration,
             commands::meeting_ping,
             commands::report_ping,
         ])

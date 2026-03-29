@@ -10,10 +10,12 @@ import {
   createWorkItem,
   deleteWorkItem,
   getWorkItemDetail,
+  getWorkItemOrchestration,
   listParentProjects,
   listParentRequirements,
   listParentTasks,
   listWorkItems,
+  saveWorkItemOrchestration,
   updateWorkItem,
 } from "./work-item";
 
@@ -23,7 +25,7 @@ const sampleWorkItem = {
   kind: "project" as const,
   title: "t",
   status: "new",
-  priority: "low",
+  priority: 49_152,
   owner: "a",
   content: "",
   updatedAt: 0,
@@ -43,7 +45,7 @@ describe("统一工作项 API（前端与 Tauri 命令契约）", () => {
       parentId: 7,
       keyword: "k",
       status: "new",
-      priority: "high",
+      priority: 16_384,
       sortField: "updatedAt",
       sortOrder: "descend",
     });
@@ -55,7 +57,7 @@ describe("统一工作项 API（前端与 Tauri 命令契约）", () => {
         parentId: 7,
         keyword: "k",
         status: "new",
-        priority: "high",
+        priority: 16_384,
         sortField: "updatedAt",
         sortOrder: "descend",
       },
@@ -75,7 +77,7 @@ describe("统一工作项 API（前端与 Tauri 命令契约）", () => {
       parentId: 1,
       title: "x",
       status: "todo",
-      priority: "medium",
+      priority: 32_768,
       owner: "u",
     };
     await createWorkItem(payload);
@@ -84,7 +86,7 @@ describe("统一工作项 API（前端与 Tauri 命令契约）", () => {
 
   it("updateWorkItem 使用 update_work_item 且载荷为 { payload }", async () => {
     vi.mocked(invoke).mockResolvedValue(sampleWorkItem);
-    const payload = { id: 9, title: "x", status: "done", priority: "low", owner: "u" };
+    const payload = { id: 9, title: "x", status: "done", priority: 49_152, owner: "u" };
     await updateWorkItem(payload);
     expect(invoke).toHaveBeenCalledWith(TAURI_WORK_ITEM_COMMANDS.update, { payload });
   });
@@ -111,5 +113,22 @@ describe("统一工作项 API（前端与 Tauri 命令契约）", () => {
     vi.mocked(invoke).mockResolvedValue([]);
     await listParentTasks();
     expect(invoke).toHaveBeenCalledWith(TAURI_WORK_ITEM_COMMANDS.parentTasks);
+  });
+
+  it("getWorkItemOrchestration 调用 get_work_item_orchestration", async () => {
+    vi.mocked(invoke).mockResolvedValue({ items: [], dependencies: [] });
+    await getWorkItemOrchestration(5);
+    expect(invoke).toHaveBeenCalledWith(TAURI_WORK_ITEM_COMMANDS.orchestrationGet, { parentId: 5 });
+  });
+
+  it("saveWorkItemOrchestration 调用 save_work_item_orchestration", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const payload = {
+      parentId: 1,
+      items: [{ id: 2, priority: 100 }],
+      dependencies: [] as { predecessorId: number; successorId: number }[],
+    };
+    await saveWorkItemOrchestration(payload);
+    expect(invoke).toHaveBeenCalledWith(TAURI_WORK_ITEM_COMMANDS.orchestrationSave, { payload });
   });
 });

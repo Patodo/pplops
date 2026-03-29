@@ -74,3 +74,23 @@ pub async fn list_parent_tasks(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn get_work_item_orchestration(
+    state: tauri::State<'_, AppState>,
+    parent_id: i32,
+) -> Result<services::work_item::WorkItemOrchestrationDto, String> {
+    services::work_item::get_work_item_orchestration(&state.db, parent_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn save_work_item_orchestration(
+    state: tauri::State<'_, AppState>,
+    payload: services::work_item::SaveWorkItemOrchestrationPayload,
+) -> Result<(), String> {
+    services::work_item::save_work_item_orchestration(&state.db, payload)
+        .await
+        .map_err(|e| e.to_string())
+}

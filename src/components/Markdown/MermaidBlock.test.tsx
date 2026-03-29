@@ -19,6 +19,8 @@ describe("MermaidBlock（用户可见渲染结果）", () => {
   it("渲染成功时向页面注入返回的 SVG", async () => {
     vi.mocked(mermaid.render).mockResolvedValue({
       svg: "<svg data-testid=\"mermaid-svg\"><text>flow</text></svg>",
+      diagramType: "flowchart",
+      bindFunctions: () => {},
     });
     render(<MermaidBlock chart="graph TD;A-->B" />);
     await waitFor(() => {

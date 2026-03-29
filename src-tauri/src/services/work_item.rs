@@ -1,6 +1,7 @@
+use std::collections::HashSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use sea_orm::DatabaseConnection;
+use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde::{Deserialize, Serialize};
 
 use crate::repositories;
@@ -14,7 +15,7 @@ pub struct WorkItemListQuery {
     pub parent_id: Option<i32>,
     pub keyword: Option<String>,
     pub status: Option<String>,
-    pub priority: Option<String>,
+    pub priority: Option<i32>,
     pub sort_field: Option<String>,
     pub sort_order: Option<String>,
 }
@@ -26,7 +27,8 @@ pub struct CreateWorkItemPayload {
     pub parent_id: Option<i32>,
     pub title: String,
     pub status: String,
-    pub priority: String,
+    #[serde(default = "default_priority")]
+    pub priority: i32,
     pub owner: String,
     pub content: Option<String>,
     pub effort: Option<f64>,
@@ -43,7 +45,8 @@ pub struct UpdateWorkItemPayload {
     pub parent_id: Option<i32>,
     pub title: String,
     pub status: String,
-    pub priority: String,
+    #[serde(default = "default_priority")]
+    pub priority: i32,
     pub owner: String,
     pub content: Option<String>,
     pub effort: Option<f64>,
@@ -63,7 +66,7 @@ pub struct WorkItemDto {
     pub has_children: bool,
     pub title: String,
     pub status: String,
-    pub priority: String,
+    pub priority: i32,
     pub owner: String,
     pub content: String,
     pub effort: Option<f64>,
@@ -89,6 +92,62 @@ pub struct WorkItemListResult {
     pub total: u64,
     pub page: u64,
     pub page_size: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkItemDependencyEdgeDto {
+    pub predecessor_id: i32,
+    pub successor_id: i32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkItemOrchestrationDto {
+    pub items: Vec<WorkItemDto>,
+    pub dependencies: Vec<WorkItemDependencyEdgeDto>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestrationPriorityItem {
+    pub id: i32,
+    pub priority: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OrchestrationDependencyEdge {
+    pub predecessor_id: i32,
+    pub successor_id: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveWorkItemOrchestrationPayload {
+    pub parent_id: i32,
+    pub items: Vec<OrchestrationPriorityItem>,
+    pub dependencies: Vec<OrchestrationDependencyEdge>,
+}
+
+const PRIORITY_MIN: i32 = 0;
+const PRIORITY_MAX: i32 = 65535;
+
+fn default_priority() -> i32 {
+    32_768
+}
+
+fn clamp_priority(p: i32) -> i32 {
+    p.clamp(PRIORITY_MIN, PRIORITY_MAX)
+}
+
+fn next_child_kind(parent_kind: &str) -> Option<&'static str> {
+    match parent_kind {
+        "project" => Some("requirement"),
+        "requirement" => Some("task"),
+        "task" => Some("subtask"),
+        _ => None,
+    }
 }
 
 fn now_ts() -> i64 {
@@ -269,7 +328,7 @@ pub async fn create_work_item(
             parent_id: payload.parent_id,
             title: trim_or_default(payload.title, "未命名工作项"),
             status: trim_or_default(payload.status, "new"),
-            priority: trim_or_default(payload.priority, "medium"),
+            priority: clamp_priority(payload.priority),
             owner: trim_or_default(payload.owner, "未分配"),
             content,
             effort: payload.effort,
@@ -322,7 +381,7 @@ pub async fn update_work_item(
             parent_id: payload.parent_id,
             title: trim_or_default(payload.title, "未命名工作项"),
             status: trim_or_default(payload.status, "new"),
-            priority: trim_or_default(payload.priority, "medium"),
+            priority: clamp_priority(payload.priority),
             owner: trim_or_default(payload.owner, "未分配"),
             content: payload.content.map(|v| v.trim().to_owned()),
             effort: payload.effort,
@@ -418,6 +477,115 @@ pub async fn list_parent_tasks(
         .into_iter()
         .map(|(id, item_id, title)| WorkItemParentOption { id, item_id, title })
         .collect())
+}
+
+pub async fn get_work_item_orchestration(
+    db: &DatabaseConnection,
+    parent_id: i32,
+) -> Result<WorkItemOrchestrationDto, sea_orm::DbErr> {
+    let parent = repositories::work_item::get_work_item_by_id(db, parent_id).await?;
+    let Some(parent) = parent else {
+        return Err(sea_orm::DbErr::Custom("parent not found".to_owned()));
+    };
+    let Some(child_kind) = next_child_kind(parent.kind.as_str()) else {
+        return Err(sea_orm::DbErr::Custom("no child kind for parent".to_owned()));
+    };
+
+    let children =
+        repositories::work_item::list_children_of_parent(db, parent_id, child_kind).await?;
+    let child_ids: Vec<i32> = children.iter().map(|c| c.id).collect();
+    let edge_rows =
+        repositories::work_item_dependency::list_edges_within_set(db, &child_ids).await?;
+    let dependencies = edge_rows
+        .into_iter()
+        .map(|(predecessor_id, successor_id)| WorkItemDependencyEdgeDto {
+            predecessor_id,
+            successor_id,
+        })
+        .collect();
+
+    let items = children
+        .into_iter()
+        .map(|m| WorkItemDto {
+            has_children: false,
+            id: m.id,
+            item_id: m.item_id,
+            kind: m.kind,
+            parent_id: m.parent_id,
+            title: m.title,
+            status: m.status,
+            priority: m.priority,
+            owner: m.owner,
+            content: m.content,
+            effort: m.effort,
+            plan_month: m.plan_month,
+            planned_hours: m.planned_hours,
+            actual_hours: m.actual_hours,
+            due_date: m.due_date,
+            updated_at: m.updated_at,
+        })
+        .collect();
+
+    Ok(WorkItemOrchestrationDto {
+        items,
+        dependencies,
+    })
+}
+
+pub async fn save_work_item_orchestration(
+    db: &DatabaseConnection,
+    payload: SaveWorkItemOrchestrationPayload,
+) -> Result<(), sea_orm::DbErr> {
+    let parent = repositories::work_item::get_work_item_by_id(db, payload.parent_id).await?;
+    let Some(parent) = parent else {
+        return Err(sea_orm::DbErr::Custom("parent not found".to_owned()));
+    };
+    let Some(child_kind) = next_child_kind(parent.kind.as_str()) else {
+        return Err(sea_orm::DbErr::Custom("no child kind for parent".to_owned()));
+    };
+
+    let children =
+        repositories::work_item::list_children_of_parent(db, payload.parent_id, child_kind).await?;
+    let child_set: HashSet<i32> = children.iter().map(|c| c.id).collect();
+    let ids_in_payload: HashSet<i32> = payload.items.iter().map(|i| i.id).collect();
+
+    if ids_in_payload != child_set {
+        return Err(sea_orm::DbErr::Custom(
+            "orchestration items must include every child exactly once".to_owned(),
+        ));
+    }
+
+    for dep in &payload.dependencies {
+        if dep.predecessor_id == dep.successor_id {
+            return Err(sea_orm::DbErr::Custom("dependency cannot be self-referential".to_owned()));
+        }
+        if !child_set.contains(&dep.predecessor_id) || !child_set.contains(&dep.successor_id) {
+            return Err(sea_orm::DbErr::Custom(
+                "dependency endpoints must be children of parent".to_owned(),
+            ));
+        }
+    }
+
+    let ts = now_ts();
+    let child_ids: Vec<i32> = child_set.iter().copied().collect();
+    let txn = db.begin().await?;
+
+    repositories::work_item_dependency::delete_touching_children(&txn, &child_ids).await?;
+
+    for item in &payload.items {
+        repositories::work_item::set_priority_and_touch(&txn, item.id, clamp_priority(item.priority), ts)
+            .await?;
+    }
+
+    let edges: Vec<(i32, i32)> = payload
+        .dependencies
+        .iter()
+        .map(|d| (d.predecessor_id, d.successor_id))
+        .collect();
+    repositories::work_item_dependency::insert_edges(&txn, &edges, ts).await?;
+
+    txn.commit().await?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -539,7 +707,7 @@ mod tests {
             "parentId": 9,
             "keyword": "k",
             "status": "new",
-            "priority": "high",
+            "priority": 16384,
             "sortField": "updatedAt",
             "sortOrder": "descend"
         });
@@ -550,7 +718,7 @@ mod tests {
         assert_eq!(q.parent_id, Some(9));
         assert_eq!(q.keyword.as_deref(), Some("k"));
         assert_eq!(q.status.as_deref(), Some("new"));
-        assert_eq!(q.priority.as_deref(), Some("high"));
+        assert_eq!(q.priority, Some(16_384));
         assert_eq!(q.sort_field.as_deref(), Some("updatedAt"));
         assert_eq!(q.sort_order.as_deref(), Some("descend"));
     }
@@ -562,7 +730,7 @@ mod tests {
             "parentId": 3,
             "title": "t",
             "status": "todo",
-            "priority": "low",
+            "priority": 49152,
             "owner": "u",
             "content": "body",
             "effort": 1.5,
@@ -576,7 +744,7 @@ mod tests {
         assert_eq!(p.parent_id, Some(3));
         assert_eq!(p.title, "t");
         assert_eq!(p.status, "todo");
-        assert_eq!(p.priority, "low");
+        assert_eq!(p.priority, 49_152);
         assert_eq!(p.owner, "u");
         assert_eq!(p.content.as_deref(), Some("body"));
         assert_eq!(p.effort, Some(1.5));
@@ -596,7 +764,7 @@ mod tests {
             has_children: true,
             title: "Title".to_owned(),
             status: "todo".to_owned(),
-            priority: "medium".to_owned(),
+            priority: 32_768,
             owner: "o".to_owned(),
             content: "".to_owned(),
             effort: None,
@@ -614,5 +782,6 @@ mod tests {
         assert_eq!(v["hasChildren"], true);
         assert_eq!(v["planMonth"], serde_json::Value::Null);
         assert_eq!(v["updatedAt"], 99);
+        assert_eq!(v["priority"], 32_768);
     }
 }
