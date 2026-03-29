@@ -2,6 +2,7 @@ import { DeleteOutlined } from "@ant-design/icons";
 import { Button, Empty, Modal, Space, Spin, Typography, message } from "antd";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { getWorkItemOrchestration, saveWorkItemOrchestration } from "@/api/work-item";
+import type { WorkItem } from "@/types/work-item";
 import {
   ORCH_COL_GROW_BUFFER,
   ORCH_COL_WIDTH,
@@ -10,8 +11,7 @@ import {
   orchestrationLayoutFromItems,
   priorityFromGridCell,
   snapOrchestrationPosition,
-} from "@/lib/workItemPriorityLayout";
-import type { WorkItem } from "@/types/work-item";
+} from "./priorityGrid";
 
 const { Text } = Typography;
 

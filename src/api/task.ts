@@ -9,7 +9,7 @@ import {
   updateWorkItem,
 } from "@/api/work-item";
 import type { WorkItem } from "@/types/work-item";
-import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriorityLayout";
+import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriority";
 import type {
   CreateTaskPayload,
   TaskDetail,

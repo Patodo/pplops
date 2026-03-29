@@ -11,7 +11,7 @@ import {
   DEFAULT_WORK_ITEM_PRIORITY,
   PRIORITY_VALUE_MAX,
   PRIORITY_VALUE_MIN,
-} from "@/lib/workItemPriorityLayout";
+} from "@/lib/workItemPriority";
 
 export { DEFAULT_WORK_ITEM_PRIORITY, PRIORITY_VALUE_MAX, PRIORITY_VALUE_MIN };
 

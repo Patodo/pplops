@@ -1,9 +1,4 @@
-/** Numeric priority: 0–65535, smaller = higher precedence. */
-
-export const PRIORITY_VALUE_MIN = 0;
-export const PRIORITY_VALUE_MAX = 65535;
-/** 中间值：与列表默认排序一致；编排画布在「全员同 priority」时会视为靠左一列。 */
-export const DEFAULT_WORK_ITEM_PRIORITY = 32_768;
+import { PRIORITY_VALUE_MAX, PRIORITY_VALUE_MIN } from "@/lib/workItemPriority";
 
 /**
  * 编排网格编码：高 8 位 = 列 col（0..255，越小越靠左），低 8 位 = 行 row（0..255，越小越靠上）。

@@ -10,7 +10,8 @@ import {
   listParentRequirements,
   listWorkItems,
 } from "@/api/work-item";
-import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriorityLayout";
+import { WorkItemOrchestrationModal } from "@/features/work-item-orchestration";
+import { DEFAULT_WORK_ITEM_PRIORITY } from "@/lib/workItemPriority";
 import type { WorkItem, WorkItemKind, WorkItemParentOption } from "@/types/work-item";
 import { applyColumnSortMeta, type ColumnSortSpec } from "@/components/Table/applyColumnSortMeta";
 import { ColumnSettingsModal, type CommonColumnConfig } from "@/components/Table/ColumnSettingsModal";
@@ -19,7 +20,6 @@ import { mergeResizableColumns } from "@/components/Table/mergeResizableColumns"
 import { PplopsDataTable } from "@/components/Table/PplopsDataTable";
 import { usePersistedColumnLayout } from "@/components/Table/usePersistedColumnLayout";
 import { WorkItemEditModal } from "@/components/WorkItem/WorkItemEditModal";
-import { WorkItemOrchestrationModal } from "@/components/WorkItem/WorkItemOrchestrationModal";
 
 type BoardTabKey = "dashboard" | "projects" | "requirements" | "tasks";
 type BoardColumnKey =
