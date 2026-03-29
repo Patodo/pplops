@@ -419,3 +419,200 @@ pub async fn list_parent_tasks(
         .map(|(id, item_id, title)| WorkItemParentOption { id, item_id, title })
         .collect())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::DbErr;
+    use serde_json::json;
+
+    fn custom_msg(e: DbErr) -> String {
+        match e {
+            DbErr::Custom(s) => s,
+            other => panic!("expected DbErr::Custom, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn normalize_page_defaults_none_and_zero_to_one() {
+        assert_eq!(normalize_page(None), 1);
+        assert_eq!(normalize_page(Some(0)), 1);
+        assert_eq!(normalize_page(Some(3)), 3);
+    }
+
+    #[test]
+    fn normalize_page_size_defaults_and_caps_at_100() {
+        assert_eq!(normalize_page_size(None), 10);
+        assert_eq!(normalize_page_size(Some(0)), 10);
+        assert_eq!(normalize_page_size(Some(25)), 25);
+        assert_eq!(normalize_page_size(Some(100)), 100);
+        assert_eq!(normalize_page_size(Some(500)), 100);
+    }
+
+    #[test]
+    fn normalize_kind_preserves_known_kinds() {
+        for k in ["project", "requirement", "task", "subtask"] {
+            assert_eq!(normalize_kind(k), k);
+        }
+    }
+
+    #[test]
+    fn normalize_kind_unknown_falls_back_to_task() {
+        assert_eq!(normalize_kind("unknown"), "task");
+        assert_eq!(normalize_kind(""), "task");
+    }
+
+    #[test]
+    fn trim_or_default_trims_and_falls_back() {
+        assert_eq!(trim_or_default("  x  ".to_owned(), "d"), "x");
+        assert_eq!(trim_or_default("".to_owned(), "d"), "d");
+        assert_eq!(trim_or_default("   ".to_owned(), "d"), "d");
+    }
+
+    #[test]
+    fn build_default_content_includes_kind_and_item_id() {
+        let s = build_default_content("requirement", "REQ-1");
+        assert!(s.contains("requirement"));
+        assert!(s.contains("REQ-1"));
+        assert!(s.starts_with("## "));
+    }
+
+    #[test]
+    fn validate_parent_rule_project_rejects_parent() {
+        let e = validate_parent_rule("project", Some(1), None).unwrap_err();
+        assert_eq!(custom_msg(e), "project must not have parent");
+    }
+
+    #[test]
+    fn validate_parent_rule_project_ok_without_parent() {
+        validate_parent_rule("project", None, None).unwrap();
+    }
+
+    #[test]
+    fn validate_parent_rule_requirement_needs_project_parent() {
+        let e = validate_parent_rule("requirement", None, None).unwrap_err();
+        assert_eq!(custom_msg(e), "requirement must have project parent");
+
+        let e = validate_parent_rule("requirement", Some(1), None).unwrap_err();
+        assert_eq!(custom_msg(e), "requirement must have project parent");
+
+        let e = validate_parent_rule("requirement", Some(1), Some("task".to_owned())).unwrap_err();
+        assert_eq!(custom_msg(e), "requirement must have project parent");
+
+        validate_parent_rule("requirement", Some(1), Some("project".to_owned())).unwrap();
+    }
+
+    #[test]
+    fn validate_parent_rule_task_needs_requirement_parent() {
+        let e = validate_parent_rule("task", None, None).unwrap_err();
+        assert_eq!(custom_msg(e), "task must have requirement parent");
+
+        let e = validate_parent_rule("task", Some(1), Some("project".to_owned())).unwrap_err();
+        assert_eq!(custom_msg(e), "task must have requirement parent");
+
+        validate_parent_rule("task", Some(1), Some("requirement".to_owned())).unwrap();
+    }
+
+    #[test]
+    fn validate_parent_rule_subtask_needs_task_parent() {
+        let e = validate_parent_rule("subtask", None, None).unwrap_err();
+        assert_eq!(custom_msg(e), "subtask must have task parent");
+
+        let e = validate_parent_rule("subtask", Some(1), Some("requirement".to_owned())).unwrap_err();
+        assert_eq!(custom_msg(e), "subtask must have task parent");
+
+        validate_parent_rule("subtask", Some(1), Some("task".to_owned())).unwrap();
+    }
+
+    #[test]
+    fn validate_parent_rule_invalid_kind() {
+        let e = validate_parent_rule("epic", None, None).unwrap_err();
+        assert_eq!(custom_msg(e), "invalid kind");
+    }
+
+    #[test]
+    fn work_item_list_query_deserializes_camel_case_json() {
+        let v = json!({
+            "page": 2,
+            "pageSize": 15,
+            "kind": "requirement",
+            "parentId": 9,
+            "keyword": "k",
+            "status": "new",
+            "priority": "high",
+            "sortField": "updatedAt",
+            "sortOrder": "descend"
+        });
+        let q: WorkItemListQuery = serde_json::from_value(v).unwrap();
+        assert_eq!(q.page, Some(2));
+        assert_eq!(q.page_size, Some(15));
+        assert_eq!(q.kind.as_deref(), Some("requirement"));
+        assert_eq!(q.parent_id, Some(9));
+        assert_eq!(q.keyword.as_deref(), Some("k"));
+        assert_eq!(q.status.as_deref(), Some("new"));
+        assert_eq!(q.priority.as_deref(), Some("high"));
+        assert_eq!(q.sort_field.as_deref(), Some("updatedAt"));
+        assert_eq!(q.sort_order.as_deref(), Some("descend"));
+    }
+
+    #[test]
+    fn create_work_item_payload_deserializes_camel_case_json() {
+        let v = json!({
+            "kind": "task",
+            "parentId": 3,
+            "title": "t",
+            "status": "todo",
+            "priority": "low",
+            "owner": "u",
+            "content": "body",
+            "effort": 1.5,
+            "planMonth": "2026-01",
+            "plannedHours": 8.0,
+            "actualHours": 2.0,
+            "dueDate": "2026-06-01"
+        });
+        let p: CreateWorkItemPayload = serde_json::from_value(v).unwrap();
+        assert_eq!(p.kind, "task");
+        assert_eq!(p.parent_id, Some(3));
+        assert_eq!(p.title, "t");
+        assert_eq!(p.status, "todo");
+        assert_eq!(p.priority, "low");
+        assert_eq!(p.owner, "u");
+        assert_eq!(p.content.as_deref(), Some("body"));
+        assert_eq!(p.effort, Some(1.5));
+        assert_eq!(p.plan_month.as_deref(), Some("2026-01"));
+        assert_eq!(p.planned_hours, Some(8.0));
+        assert_eq!(p.actual_hours, Some(2.0));
+        assert_eq!(p.due_date.as_deref(), Some("2026-06-01"));
+    }
+
+    #[test]
+    fn work_item_dto_serializes_camel_case_json() {
+        let dto = WorkItemDto {
+            id: 1,
+            item_id: "TASK-1".to_owned(),
+            kind: "task".to_owned(),
+            parent_id: Some(2),
+            has_children: true,
+            title: "Title".to_owned(),
+            status: "todo".to_owned(),
+            priority: "medium".to_owned(),
+            owner: "o".to_owned(),
+            content: "".to_owned(),
+            effort: None,
+            plan_month: None,
+            planned_hours: Some(1.0),
+            actual_hours: None,
+            due_date: None,
+            updated_at: 99,
+        };
+        let v = serde_json::to_value(&dto).unwrap();
+        assert_eq!(v["id"], 1);
+        assert_eq!(v["itemId"], "TASK-1");
+        assert_eq!(v["kind"], "task");
+        assert_eq!(v["parentId"], 2);
+        assert_eq!(v["hasChildren"], true);
+        assert_eq!(v["planMonth"], serde_json::Value::Null);
+        assert_eq!(v["updatedAt"], 99);
+    }
+}

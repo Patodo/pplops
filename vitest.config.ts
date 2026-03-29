@@ -20,7 +20,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
-      include: ["src/components/Table/**/*.{ts,tsx}"],
+      include: [
+        "src/components/Table/**/*.{ts,tsx}",
+        "src/components/Markdown/**/*.{ts,tsx}",
+        "src/config/**/*.ts",
+        "src/utils/**/*.ts",
+        "src/api/**/*.ts",
+        "src/test/**/*.ts",
+      ],
       exclude: ["**/*.test.{ts,tsx}", "**/ColumnSettingsModal.tsx"],
     },
   },
