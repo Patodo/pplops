@@ -1,3 +1,4 @@
+import React from "react";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
@@ -12,9 +13,7 @@ function App() {
           <Route path="/" element={<AppLayout />}>
             <Route index element={<Navigate to="/boards" replace />} />
             {featureRouteDescriptors.map((f) => (
-              <Route key={f.id} path="" element={<></>}>
-                {f.renderRoutes()}
-              </Route>
+              <React.Fragment key={f.id}>{f.renderRoutes()}</React.Fragment>
             ))}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
