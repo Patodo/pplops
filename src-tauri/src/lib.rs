@@ -1,6 +1,7 @@
 #![cfg_attr(mobile, tauri::mobile_entry_point)]
 
 mod commands;
+mod data_access;
 mod error;
 mod migration;
 mod models;
@@ -80,7 +81,25 @@ pub fn run() {
             let handle = app.handle().clone();
             let db = tauri::async_runtime::block_on(connect_db(&handle))
                 .map_err(|e| format!("database init failed: {e}"))?;
-            app.manage(state::AppState { db });
+            let cache = std::sync::Arc::new(tokio::sync::RwLock::new(
+                crate::data_access::DataCache::empty(),
+            ));
+            tauri::async_runtime::block_on(async {
+                let enabled = crate::repositories::app_setting::get_memory_cache_mode(&db)
+                    .await
+                    .map_err(|e| format!("read app settings: {e}"))?;
+                {
+                    let mut g = cache.write().await;
+                    g.memory_cache_enabled = enabled;
+                }
+                if enabled {
+                    crate::data_access::cache::hydrate_from_db(&db, &cache)
+                        .await
+                        .map_err(|e| format!("hydrate cache: {e}"))?;
+                }
+                Ok::<(), String>(())
+            })?;
+            app.manage(state::AppState { db, cache });
             setup_tray(app.handle())?;
             Ok(())
         })

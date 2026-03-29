@@ -51,6 +51,10 @@ pub struct WorkItemUpdateInput {
     pub updated_at: i64,
 }
 
+pub async fn find_all(db: &DatabaseConnection) -> Result<Vec<Model>, sea_orm::DbErr> {
+    Entity::find().all(db).await
+}
+
 pub async fn list_work_items(
     db: &DatabaseConnection,
     q: WorkItemListQuery,

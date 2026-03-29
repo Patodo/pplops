@@ -18,3 +18,9 @@
   - 业务状态优先放在所属 feature 内部或 `src/shared/` 模块。
   - **禁止** feature A 直接 import feature B 的 store 实现文件；如需跨域通信，用 shared 内核或 props 回调。
 
+## 后端（Tauri）
+
+- **数据访问门面**：`src-tauri/src/data_access/`。新增或修改**读路径**时，应经 `data_access` 根据应用设置（如「内存缓存模式」）在 **SQLite（repositories）** 与 **内存快照** 之间路由；避免在 `commands` 或零散位置绕过门面直连 repository，除非有审查认可的例外并注释原因。
+- **写路径**：以数据库为权威；`invoke` 写操作成功后，若内存缓存开启且已灌库，应 **同步更新** `DataCache` 中对应实体（或按约定 **失效并重灌**，见 `data_access::cache`）。新增会改表的命令时遵循同一套约定。
+- **应用设置**：键值表 `app_setting`（迁移内）；`memory_cache_mode` 与设置页开关一致，由 `get_app_settings` / `set_app_settings` / `refresh_data_cache` 暴露给前端（`src/api/app.ts`）。
+

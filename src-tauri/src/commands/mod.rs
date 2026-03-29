@@ -1,3 +1,4 @@
+mod app_settings;
 mod invoke_list;
 mod requirement;
 mod planning;
@@ -10,6 +11,7 @@ mod report;
 mod app;
 
 pub use app::*;
+pub use app_settings::*;
 pub use requirement::*;
 pub use planning::*;
 pub use member::*;

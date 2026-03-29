@@ -1,3 +1,4 @@
+pub mod app_setting;
 pub mod member;
 pub mod requirement;
 pub mod task;

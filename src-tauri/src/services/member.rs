@@ -102,7 +102,7 @@ fn trim_or_default(value: String, default: &str) -> String {
     }
 }
 
-fn build_member_template_content() -> String {
+pub(crate) fn build_member_template_content() -> String {
     r#"## 专业能力
 ### 核心技能
 | 技能类别 | 技能项目 | 熟练程度(1-5) | 最后使用时间 |

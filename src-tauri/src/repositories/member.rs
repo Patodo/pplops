@@ -49,6 +49,10 @@ pub async fn count_members(db: &DatabaseConnection) -> Result<u64, sea_orm::DbEr
     Entity::find().count(db).await
 }
 
+pub async fn find_all(db: &DatabaseConnection) -> Result<Vec<Model>, sea_orm::DbErr> {
+    Entity::find().all(db).await
+}
+
 pub async fn list_members(
     db: &DatabaseConnection,
     q: MemberListQuery,

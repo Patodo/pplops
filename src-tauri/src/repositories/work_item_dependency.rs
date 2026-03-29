@@ -1,8 +1,13 @@
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, EntityTrait, QueryFilter, Set,
+    ActiveModelTrait, ColumnTrait, Condition, ConnectionTrait, DatabaseConnection, EntityTrait,
+    QueryFilter, Set,
 };
 
-use crate::models::work_item_dependency::{ActiveModel, Column, Entity};
+use crate::models::work_item_dependency::{ActiveModel, Column, Entity, Model};
+
+pub async fn find_all(db: &DatabaseConnection) -> Result<Vec<Model>, sea_orm::DbErr> {
+    Entity::find().all(db).await
+}
 
 pub async fn list_edges_within_set<C: ConnectionTrait>(
     db: &C,

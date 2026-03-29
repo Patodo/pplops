@@ -1,3 +1,4 @@
+pub mod app_setting;
 pub mod common;
 pub mod member;
 pub mod requirement;
