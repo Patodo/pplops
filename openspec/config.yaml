@@ -1,0 +1,30 @@
+schema: spec-driven
+
+context: |
+  ## Tech Stack
+  - Desktop: Tauri 2.x (Rust backend + WebView frontend)
+  - Backend: Rust, SQLite (via rusqlite), SeaORM (models + migration)
+  - Frontend: React 18, TypeScript, Ant Design 5.x, Zustand, TailwindCSS 4, Vite 6
+  - Charts: Apache ECharts
+  - Drag & Drop: dnd-kit
+  - Package Manager: pnpm (Node), Cargo (Rust)
+
+  ## Domain Conventions
+  - **Single-table polymorphism**: work_item 表通过 kind 字段存储 project/requirement/task/subtask 四种实体，通过 parent_id 自引用构建层级树
+  - **Priority**: i32 数值域 0–65535，默认 32768（非 P0-P3 字符串）
+  - **Dependency graph**: work_item_dependency 有向边表，仅限同父级 children 范围
+  - **Data access facade**: commands 层不直接调用 services，通过 data_access 门面统一路由读操作（可选内存缓存优先，DB fallback）
+  - **Write-through cache**: 写操作先 DB 后同步内存缓存
+  - **Feature-based frontend**: src/features/<name>/ 独立模块，各导出 nav.ts + 页面组件
+  - **Legacy tables**: migration 中仍有独立的 requirement/task 表，但新代码通过 work_item 访问
+  - **Status enums**: 字符串存储，应用层校验（非数据库枚举）
+  - **Owner linkage**: work_item.owner 字段为字符串匹配 member.name（无 FK 约束）
+
+rules:
+  proposal:
+    - Keep proposals concise, focus on motivation and capability scope
+  specs:
+    - Each requirement MUST have at least one scenario in WHEN/THEN format
+    - Scenarios MUST use exactly 4 hashtags (####)
+  tasks:
+    - Break tasks into chunks verifiable by reading code or running tests
